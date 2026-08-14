@@ -56,6 +56,25 @@ final class SharedSurfaceIntegrationTests: XCTestCase {
         }
     }
 
+    func testClaudeAuthRecoveryOffersTerminalGuidanceAndHonestLaunchFailure() {
+        let readings = [anthropicStatus(.authRequired(.anthropicAuthRequired))]
+        XCTAssertTrue(ClaudeLoginRecovery.isRequired(for: readings))
+        XCTAssertEqual(ClaudeLoginRecovery.guidance, "Open Terminal and run: claude auth login")
+        XCTAssertEqual(ClaudeLoginRecovery.openTerminal(using: { _ in true }), "Terminal opened. Open Terminal and run: claude auth login")
+        XCTAssertEqual(ClaudeLoginRecovery.openTerminal(using: { _ in false }), "Could not open Terminal. Open Terminal and run: claude auth login")
+        XCTAssertFalse(ClaudeLoginRecovery.isRequired(for: [anthropicStatus(.unavailable(.anthropicNetworkUnavailable))]))
+    }
+
+    func testSourceDetailsAreHiddenOnlyFromCompactMenu() {
+        XCTAssertFalse(SurfaceDetailsPolicy.showsSourceDetails(compact: true))
+        XCTAssertTrue(SurfaceDetailsPolicy.showsSourceDetails(compact: false))
+
+        let authReading = anthropicStatus(.authRequired(.anthropicAuthRequired))
+        let accessibility = UsageAccessibility.label(for: authReading).lowercased()
+        XCTAssertTrue(accessibility.contains("sign-in required"))
+        XCTAssertTrue(accessibility.contains("state auth-required"))
+    }
+
     func testDashboardAndMenuViewsHaveNoIndependentAcquisitionState() {
         let store = fixtureStore()
         let menu = CompactMenuView(store: store)
@@ -228,6 +247,16 @@ final class SharedSurfaceIntegrationTests: XCTestCase {
         XCTAssertEqual(SettingsPresentation.codexStatusLabel(for: nil), "Not applicable")
         XCTAssertNil(SettingsPresentation.codexConsequenceText(for: nil))
         XCTAssertFalse(SettingsPresentation.codexPathText(for: nil).isEmpty)
+    }
+
+    private func anthropicStatus(_ state: ReadingState) -> UsageReading {
+        UsageReading(
+            id: .anthropicStatus,
+            provider: .anthropic,
+            title: "Claude subscription quota",
+            scopeDescription: "Consumer · local Claude Code",
+            state: state
+        )
     }
 
     private func fixtureStore() -> UsageStore {

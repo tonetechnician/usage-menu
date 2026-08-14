@@ -181,6 +181,28 @@ struct DashboardView: View {
     }
 }
 
+enum SurfaceDetailsPolicy {
+    static func showsSourceDetails(compact: Bool) -> Bool { !compact }
+}
+
+enum ClaudeLoginRecovery {
+    static func isRequired(for readings: [UsageReading]) -> Bool {
+        readings.contains { $0.provider == .anthropic && $0.state.statusName == "auth-required" }
+    }
+
+    static let terminalURL = URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app")
+    static let command = "claude auth login"
+    static let guidance = "Open Terminal and run: \(command)"
+
+    /// Opens only Terminal; the user explicitly starts Claude Code's provider-owned login.
+    /// Usage Menu never supplies credentials, runs the command, or interprets its outcome.
+    static func openTerminal(using opener: (URL) -> Bool = { NSWorkspace.shared.open($0) }) -> String {
+        opener(terminalURL)
+            ? "Terminal opened. \(guidance)"
+            : "Could not open Terminal. \(guidance)"
+    }
+}
+
 private struct ProviderGroup: View {
     let title: String
     let subtitle: String
@@ -188,6 +210,7 @@ private struct ProviderGroup: View {
     let compact: Bool
     let identifierPrefix: String
     let sourceDescription: String
+    @State private var loginRecoveryMessage: String?
 
     private var visibleReadings: [UsageReading] {
         UsageAccessibility.visibleReadings(from: readings)
@@ -227,12 +250,42 @@ private struct ProviderGroup: View {
                 }
             }
 
-            SourceDetails(
-                sourceDescription: sourceDescription,
-                readings: readings,
-                compact: compact
-            )
+            if title == "Anthropic", ClaudeLoginRecovery.isRequired(for: readings) {
+                ClaudeLoginRecoveryView(compact: compact, message: $loginRecoveryMessage)
+            }
+
+            if SurfaceDetailsPolicy.showsSourceDetails(compact: compact) {
+                SourceDetails(
+                    sourceDescription: sourceDescription,
+                    readings: readings,
+                    compact: false
+                )
+            }
         }
+    }
+}
+
+private struct ClaudeLoginRecoveryView: View {
+    let compact: Bool
+    @Binding var message: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Claude Code sign-in required")
+                .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+            Text(message ?? ClaudeLoginRecovery.guidance)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel(message ?? "Claude Code sign-in guidance: \(ClaudeLoginRecovery.guidance)")
+            Button("Open Terminal") {
+                message = ClaudeLoginRecovery.openTerminal()
+            }
+            .accessibilityIdentifier(compact ? "menu-claude-login" : "dashboard-claude-login")
+            .accessibilityLabel("Open Terminal for Claude Code sign-in")
+            .accessibilityHint("Usage Menu does not sign you in. Run claude auth login in Terminal.")
+        }
+        .padding(compact ? 8 : 12)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 }
 
