@@ -1,0 +1,33 @@
+# macOS and editor state
+.DS_Store
+*.swp
+*~
+
+# Xcode/Swift derived outputs and local IDE state
+.build/
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+*.xcresult
+.swiftpm/
+
+# Generated packages, local hand-offs, caches, and scratch data
+dist/
+handoff/
+scratch/
+*.app
+*.dmg
+*.pkg
+*.zip
+__pycache__/
+*.py[cod]
+
+# Credentials and machine-local configuration must never enter Git.
+.env
+.env.*
+!.env.example
+*.p12
+*.pem
+*.key
+*.mobileprovision

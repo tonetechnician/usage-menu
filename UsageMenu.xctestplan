@@ -1,0 +1,34 @@
+{
+  "configurations" : [
+    {
+      "id" : "10000000-0000-0000-0000-000000000001",
+      "name" : "Default",
+      "options" : {
+        "environmentVariableEntries" : [
+          {"key" : "USAGE_MENU_RUN_LIVE_TESTS", "value" : "0", "isEnabled" : true},
+          {"key" : "USAGE_MENU_RUN_ANTHROPIC_LIVE_TESTS", "value" : "0", "isEnabled" : true}
+        ]
+      }
+    }
+  ],
+  "defaultOptions" : {},
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:UsageMenu.xcodeproj",
+        "identifier" : "A50000000000000000000002",
+        "name" : "UsageMenuTests"
+      }
+    },
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:UsageMenu.xcodeproj",
+        "identifier" : "A50000000000000000000003",
+        "name" : "UsageMenuIntegrationTests"
+      }
+    }
+  ],
+  "version" : 1
+}
