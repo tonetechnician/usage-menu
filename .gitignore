@@ -1,5 +1,10 @@
 # macOS and editor state
 .DS_Store
+
+# Deliberate divergence from fleet sections that track stores: this public boundary gives up
+# transfer-unit behavior. Clones carry no Symphony tasks, decisions, or knowledge; local store
+# documents have no Git history. Federation reads the local store from disk, so lint/queries work.
+.symphony/
 *.swp
 *~
 

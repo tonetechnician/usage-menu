@@ -19,6 +19,23 @@ Run `make help` for the current command list.
 
 `make check` is the normal pre-change and pre-commit validation. Run it from a fresh worktree when verifying a change that must not depend on local build state.
 
+## Public synchronization path
+
+The section's private local repository remains the source authority and orchestration history. Its commits intentionally have different IDs from the public repository. The public repository is a clean source-only history: its clean root is the base for all future public commits.
+
+After a change lands on local `main`, replay each landed source patch in order onto an isolated public clone as an ordinary public commit. Use a reviewed `format-patch`/`git am` flow or an equivalent reviewed patch application, with the configured personal Git identity. Do not merge or graft the private graph, and do not push private refs to the public repository.
+
+Before every public push:
+
+1. Read back remote `main` and stop on unexpected remote movement.
+2. Confirm exact final source-tree equality between local `main` and the public candidate for tracked public source.
+3. Scan every reachable public commit for secrets, machine-specific paths, transcripts, artifacts, and generated output.
+4. Run `make check` from a cold detached worktree.
+
+Push normally as a fast-forward. Force pushes are exceptional: they require explicit authorization and an exact `--force-with-lease`, as used for the one-time author rewrite. Record the local-to-public SHA mapping for every replayed commit so the intentional ID difference remains auditable.
+
+`.symphony/` is private orchestration task/runtime state. It is ignored, remains durable locally through Symphony's store and task lifecycle, and must neither create checkout dirt nor enter public Git; do not delete its local records. This deliberately differs from fleet sections that track their stores: the public boundary gives up the transfer-unit property. Public clones carry no Symphony tasks, decisions, or knowledge, and store documents have no Git history. Federation continues to read the local store from disk, so local Symphony lint and queries are unaffected. This is an accepted boundary cost, not hygiene or an accidental omission.
+
 ## Tests and source boundaries
 
 `UsageMenuTests/` contains deterministic unit tests for the domain, store, adapters, discovery, diagnostics, and fixtures. `UsageMenuIntegrationTests/` checks the shared presentation surface. `UsageMenuTests/Fixtures/fake-codex-app-server.py` is a deterministic protocol fixture.
