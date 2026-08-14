@@ -25,7 +25,7 @@ Run `make help` for the current command list.
 
 Default test plans disable live provider access. Live tests are explicit because they use a signed-in, provider-owned local session and can fail for local account or network reasons. They are not a replacement for deterministic tests.
 
-Keep app implementation in `UsageMenu/`: `App/` lifecycle and composition, `Domain/` normalized model, `Store/` refresh behavior, `Codex/` and `Anthropic/` acquisition adapters, `UI/` presentation, and `Diagnostics/` redacted command-line output.
+Keep app implementation in `UsageMenu/`: `App/` lifecycle and composition, `Domain/` normalized model, `Store/` refresh behavior, `Providers/OpenAI/` and `Providers/Anthropic/` acquisition adapters, `UI/` presentation, and `Diagnostics/` redacted command-line output.
 
 ## Generated output and packaging
 

@@ -44,9 +44,9 @@ diagnose-fixture: $(DIAGNOSTIC)
 
 $(DIAGNOSTIC): \
 	UsageMenu/Domain/UsageModels.swift \
-	UsageMenu/Codex/CodexAppServer.swift \
-	UsageMenu/Codex/CodexExecutableDiscovery.swift \
-	UsageMenu/Anthropic/AnthropicQuotaSource.swift \
+	UsageMenu/Providers/OpenAI/CodexAppServer.swift \
+	UsageMenu/Providers/OpenAI/CodexExecutableDiscovery.swift \
+	UsageMenu/Providers/Anthropic/AnthropicQuotaSource.swift \
 	UsageMenu/Diagnostics/RedactedDiagnostics.swift \
 	UsageMenu/Diagnostics/DiagnosticMain.swift
 	@mkdir -p "$(BUILD_DIR)"

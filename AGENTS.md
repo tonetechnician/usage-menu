@@ -20,7 +20,7 @@
 - `UsageMenu/App/`: application composition and lifecycle ownership.
 - `UsageMenu/Domain/`: normalized observations and reading states.
 - `UsageMenu/Store/`: refresh, failure, and freshness transitions.
-- `UsageMenu/Codex/` and `UsageMenu/Anthropic/`: provider-specific acquisition.
+- `UsageMenu/Providers/OpenAI/` and `UsageMenu/Providers/Anthropic/`: provider-specific acquisition.
 - `UsageMenu/UI/`: SwiftUI views and accessibility text.
 - `UsageMenu/Diagnostics/`: redacted command-line diagnostics.
 - `UsageMenuTests/` and `UsageMenuIntegrationTests/`: deterministic coverage; live access is explicit only.

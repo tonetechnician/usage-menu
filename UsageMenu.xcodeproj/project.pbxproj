@@ -68,10 +68,11 @@
 			);
 			sourceTree = "<group>";
 		};
-		A70000000000000000000002 /* UsageMenu */ = {isa = PBXGroup; path = UsageMenu; sourceTree = "<group>"; children = (A70000000000000000000003 /* App */, A70000000000000000000004 /* Domain */, A70000000000000000000005 /* Codex */, A70000000000000000000012 /* Anthropic */, A70000000000000000000006 /* Store */, A70000000000000000000008 /* UI */, A70000000000000000000013 /* Diagnostics */); };
+		A70000000000000000000002 /* UsageMenu */ = {isa = PBXGroup; path = UsageMenu; sourceTree = "<group>"; children = (A70000000000000000000003 /* App */, A70000000000000000000004 /* Domain */, A70000000000000000000014 /* Providers */, A70000000000000000000006 /* Store */, A70000000000000000000008 /* UI */, A70000000000000000000013 /* Diagnostics */); };
 		A70000000000000000000003 /* App */ = {isa = PBXGroup; path = App; sourceTree = "<group>"; children = (A20000000000000000000001 /* UsageMenuApp.swift */); };
 		A70000000000000000000004 /* Domain */ = {isa = PBXGroup; path = Domain; sourceTree = "<group>"; children = (A20000000000000000000002 /* UsageModels.swift */); };
-		A70000000000000000000005 /* Codex */ = {isa = PBXGroup; path = Codex; sourceTree = "<group>"; children = (A20000000000000000000003 /* CodexAppServer.swift */, A20000000000000000000020 /* CodexExecutableDiscovery.swift */); };
+		A70000000000000000000014 /* Providers */ = {isa = PBXGroup; path = Providers; sourceTree = "<group>"; children = (A70000000000000000000005 /* OpenAI */, A70000000000000000000012 /* Anthropic */); };
+		A70000000000000000000005 /* OpenAI */ = {isa = PBXGroup; path = OpenAI; sourceTree = "<group>"; children = (A20000000000000000000003 /* CodexAppServer.swift */, A20000000000000000000020 /* CodexExecutableDiscovery.swift */); };
 		A70000000000000000000012 /* Anthropic */ = {isa = PBXGroup; path = Anthropic; sourceTree = "<group>"; children = (A20000000000000000000013 /* AnthropicQuotaSource.swift */); };
 		A70000000000000000000006 /* Store */ = {isa = PBXGroup; path = Store; sourceTree = "<group>"; children = (A20000000000000000000004 /* UsageStore.swift */); };
 		A70000000000000000000008 /* UI */ = {isa = PBXGroup; path = UI; sourceTree = "<group>"; children = (A20000000000000000000005 /* UsageViews.swift */); };

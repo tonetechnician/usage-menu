@@ -34,6 +34,6 @@ A refresh temporarily marks prior observations stale. A successful source replac
 
 ## Provider adapters
 
-`UsageMenu/Codex/` discovers a configured or locally installed Codex executable and launches its documented `app-server --stdio` interface. Codex owns its authentication. `UsageMenu/Anthropic/AnthropicQuotaSource.swift` reads an existing Claude Code credential only long enough to make a request to Anthropic's provider-owned quota interface. That interface is undocumented and intentionally treated as fragile.
+`UsageMenu/Providers/OpenAI/` discovers a configured or locally installed Codex executable and launches its documented `app-server --stdio` interface. Codex owns its authentication. `UsageMenu/Providers/Anthropic/AnthropicQuotaSource.swift` reads an existing Claude Code credential only long enough to make a request to Anthropic's provider-owned quota interface. That interface is undocumented and intentionally treated as fragile.
 
 `UsageMenu/Diagnostics/` provides a command-line diagnostic executable that uses the same acquisition code and emits normalized, redacted rows. It does not emit credentials, account references, authorization values, or raw provider responses.
