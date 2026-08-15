@@ -1,6 +1,11 @@
 import Combine
 import Foundation
 
+enum AutomaticRefreshEvent: String {
+    case widgetOpened = "widget_opened"
+    case acquisitionAttempt = "acquisition_attempt"
+}
+
 @MainActor
 final class UsageStore: ObservableObject {
     let instanceIdentifier = UUID()
@@ -22,7 +27,8 @@ final class UsageStore: ObservableObject {
     private let anthropicSource: AnthropicUsageSource
     private let now: () -> Date
     private let activationDebounceNanoseconds: UInt64
-    private var activationTask: Task<Void, Never>?
+    private var automaticRefreshTask: Task<Void, Never>?
+    private let recordAutomaticRefreshEvent: (AutomaticRefreshEvent) -> Void
     /// Supplied by the app so that changing the path rebuilds the live source — and so the
     /// app can re-take lifecycle ownership of the replacement, which only it can do.
     private let rebuildCodexSource: ((CodexExecutableDiscovery.Outcome) -> CodexUsageSource)?
@@ -34,7 +40,8 @@ final class UsageStore: ObservableObject {
         now: @escaping () -> Date = Date.init,
         activationDebounceNanoseconds: UInt64 = 300_000_000,
         codexResolution: CodexExecutableDiscovery.Outcome? = nil,
-        rebuildCodexSource: ((CodexExecutableDiscovery.Outcome) -> CodexUsageSource)? = nil
+        rebuildCodexSource: ((CodexExecutableDiscovery.Outcome) -> CodexUsageSource)? = nil,
+        recordAutomaticRefreshEvent: @escaping (AutomaticRefreshEvent) -> Void = { _ in }
     ) {
         self.codexResolution = codexResolution
         self.rebuildCodexSource = rebuildCodexSource
@@ -43,6 +50,7 @@ final class UsageStore: ObservableObject {
         self.mode = mode
         self.now = now
         self.activationDebounceNanoseconds = activationDebounceNanoseconds
+        self.recordAutomaticRefreshEvent = recordAutomaticRefreshEvent
         self.sourceLabel = mode == .fixture
             ? "Fixture · explicit Codex and Claude schemas"
             : "Live · local Codex + local Claude Code session"
@@ -107,11 +115,21 @@ final class UsageStore: ObservableObject {
         await refresh()
     }
 
-    /// App activation is noisy. Replace a pending request instead of starting another one;
-    /// `refresh()` remains the single-flight boundary if activation races manual refresh.
+    /// App activation is noisy, but a compact widget opening is the reliable boundary for an
+    /// accessory app. Both requests deliberately use this one trailing-edge debounce and the
+    /// same `refresh()` single-flight boundary.
     func refreshAfterActivation() {
-        activationTask?.cancel()
-        activationTask = Task { [weak self] in
+        requestAutomaticRefresh()
+    }
+
+    func refreshAfterWidgetOpen() {
+        recordAutomaticRefreshEvent(.widgetOpened)
+        requestAutomaticRefresh()
+    }
+
+    private func requestAutomaticRefresh() {
+        automaticRefreshTask?.cancel()
+        automaticRefreshTask = Task { [weak self] in
             guard let self else { return }
             if self.activationDebounceNanoseconds > 0 {
                 try? await Task.sleep(nanoseconds: self.activationDebounceNanoseconds)
@@ -125,6 +143,7 @@ final class UsageStore: ObservableObject {
 
     func refresh() async {
         guard !isRefreshing else { return }
+        recordAutomaticRefreshEvent(.acquisitionAttempt)
         markObservationsRefreshing()
         isRefreshing = true
         defer {
@@ -140,7 +159,7 @@ final class UsageStore: ObservableObject {
     }
 
     func cancel() {
-        activationTask?.cancel()
+        automaticRefreshTask?.cancel()
         codexSource.cancel()
         anthropicSource.cancel()
     }

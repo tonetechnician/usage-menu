@@ -148,7 +148,7 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(anthropic.maximumConcurrentCalls, 1)
     }
 
-    func testActivationBurstDebouncesToOneRefreshAndMarksPriorReadingsNonCurrentUntilSuccess() async throws {
+    func testWidgetOpenBurstDebouncesToOneRefreshAndMarksPriorReadingsNonCurrentUntilSuccess() async throws {
         let initialCodex = await fixtureCodexSnapshot()
         let initialAnthropic = try await FixtureAnthropicSource().fetch()
         let codex = ScriptedCodexSource(
@@ -167,9 +167,9 @@ final class UsageStoreTests: XCTestCase {
         )
 
         await store.refresh()
-        store.refreshAfterActivation()
-        store.refreshAfterActivation()
-        store.refreshAfterActivation()
+        store.refreshAfterWidgetOpen()
+        store.refreshAfterWidgetOpen()
+        store.refreshAfterWidgetOpen()
         for _ in 0..<20 where codex.callCount < 2 || anthropic.callCount < 2 { await Task.yield() }
 
         XCTAssertTrue(store.isRefreshing)
@@ -177,8 +177,8 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(store.weekly.statusName, "stale")
         XCTAssertTrue(store.anthropicReadings.allSatisfy { $0.state.statusName == "stale" })
         XCTAssertEqual(store.session.observation, initialCodex.session)
-        XCTAssertEqual(codex.callCount, 2, "one initial and one coalesced activation fetch")
-        XCTAssertEqual(anthropic.callCount, 2, "one initial and one coalesced activation fetch")
+        XCTAssertEqual(codex.callCount, 2, "one initial and one coalesced widget-open fetch")
+        XCTAssertEqual(anthropic.callCount, 2, "one initial and one coalesced widget-open fetch")
 
         while store.isRefreshing { await Task.yield() }
         XCTAssertEqual(store.session.statusName, "current")
@@ -188,7 +188,7 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(anthropic.maximumConcurrentCalls, 1)
     }
 
-    func testActivationFailurePreservesOnlyProviderSpecificPriorObservationsAsStale() async throws {
+    func testWidgetOpenFailurePreservesOnlyProviderSpecificPriorObservationsAsStale() async throws {
         let codexSnapshot = await fixtureCodexSnapshot()
         let anthropicSnapshot = try anthropicSnapshot(sessionReset: 1_900_010_000, weeklyReset: 1_900_020_000)
         let store = UsageStore(
@@ -202,7 +202,7 @@ final class UsageStoreTests: XCTestCase {
         let codexPrior = store.session.observation
         let anthropicPrior = store.anthropicReadings.map { $0.state.observation }
 
-        store.refreshAfterActivation()
+        store.refreshAfterWidgetOpen()
         while store.isRefreshing == false { await Task.yield() }
         XCTAssertEqual(store.session.observation, codexPrior)
         XCTAssertTrue(store.anthropicReadings.allSatisfy { $0.state.statusName == "stale" })
@@ -214,6 +214,45 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(observation, codexPrior)
         XCTAssertEqual(store.anthropicReadings.map { $0.state.observation }, anthropicPrior)
         XCTAssertTrue(store.anthropicReadings.allSatisfy { $0.state.statusName == "stale" })
+    }
+
+    func testWidgetReopenAndManualRefreshEachReachSharedSingleFlight() async throws {
+        let snapshot = await fixtureCodexSnapshot()
+        let anthropicSnapshot = try await FixtureAnthropicSource().fetch()
+        let codex = ScriptedCodexSource(results: [.success(snapshot), .success(snapshot), .success(snapshot), .success(snapshot)])
+        let anthropic = ScriptedAnthropicSource(results: [.success(anthropicSnapshot), .success(anthropicSnapshot), .success(anthropicSnapshot), .success(anthropicSnapshot)])
+        var events: [AutomaticRefreshEvent] = []
+        let store = UsageStore(
+            codexSource: codex,
+            anthropicSource: anthropic,
+            mode: .fixture,
+            activationDebounceNanoseconds: 0,
+            recordAutomaticRefreshEvent: { events.append($0) }
+        )
+
+        await store.refresh() // Manual refresh remains direct.
+        store.refreshAfterWidgetOpen() // One genuine open plus recomposition appearances.
+        store.refreshAfterActivation() // Dashboard activation shares the same pending request.
+        store.refreshAfterWidgetOpen()
+        store.refreshAfterWidgetOpen()
+        for _ in 0..<50 where codex.callCount < 2 || anthropic.callCount < 2 { await Task.yield() }
+        XCTAssertEqual(codex.callCount, 2)
+        XCTAssertEqual(anthropic.callCount, 2)
+        while store.isRefreshing { await Task.yield() }
+
+        store.refreshAfterWidgetOpen() // Close/reopen after the completed debounce.
+        for _ in 0..<50 where codex.callCount < 3 || anthropic.callCount < 3 { await Task.yield() }
+        XCTAssertEqual(codex.callCount, 3)
+        XCTAssertEqual(anthropic.callCount, 3)
+        while store.isRefreshing { await Task.yield() }
+
+        await store.refresh()
+        XCTAssertEqual(codex.callCount, 4)
+        XCTAssertEqual(anthropic.callCount, 4)
+        XCTAssertEqual(events.filter { $0 == .widgetOpened }.count, 4)
+        XCTAssertEqual(events.filter { $0 == .acquisitionAttempt }.count, 4)
+        XCTAssertEqual(codex.maximumConcurrentCalls, 1)
+        XCTAssertEqual(anthropic.maximumConcurrentCalls, 1)
     }
 
     func testSharedStartupTriggerIsOneShotAndPollingIsAbsent() async {

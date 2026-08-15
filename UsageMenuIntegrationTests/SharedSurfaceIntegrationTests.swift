@@ -249,6 +249,37 @@ final class SharedSurfaceIntegrationTests: XCTestCase {
         XCTAssertFalse(SettingsPresentation.codexPathText(for: nil).isEmpty)
     }
 
+    func testCompactWidgetPresentationBoundaryEmitsOpenThenAcquisitionAttempt() async throws {
+        var events: [AutomaticRefreshEvent] = []
+        let store = UsageStore(
+            codexSource: FixtureCodexSource(),
+            anthropicSource: FixtureAnthropicSource(),
+            mode: .fixture,
+            activationDebounceNanoseconds: 0,
+            recordAutomaticRefreshEvent: { events.append($0) }
+        )
+
+        CompactWidgetPresentationBoundary.appeared(store: store)
+        for _ in 0..<50 where events.count < 2 { await Task.yield() }
+
+        XCTAssertEqual(events, [.widgetOpened, .acquisitionAttempt])
+    }
+
+    /// This pins the actual MenuBarExtra content to the production presentation boundary. It
+    /// deliberately fails if somebody substitutes the app-activation path, which is unreliable
+    /// for an LSUIElement status app.
+    func testMenuBarExtraCompactContentWiresOnAppearToPresentationBoundary() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(contentsOf: repositoryRoot.appendingPathComponent("UsageMenu/App/UsageMenuApp.swift"))
+        let compactContent = try XCTUnwrap(appSource.components(separatedBy: "MenuBarExtra {").dropFirst().first)
+        let contentBeforeLabel = try XCTUnwrap(compactContent.components(separatedBy: "} label:").first)
+
+        XCTAssertTrue(contentBeforeLabel.contains(".onAppear { CompactWidgetPresentationBoundary.appeared(store: store) }"))
+        XCTAssertFalse(contentBeforeLabel.contains("refreshAfterActivation"))
+    }
+
     private func anthropicStatus(_ state: ReadingState) -> UsageReading {
         UsageReading(
             id: .anthropicStatus,

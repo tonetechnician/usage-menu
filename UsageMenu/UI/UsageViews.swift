@@ -18,6 +18,16 @@ enum CompactMenuAction: Equatable {
     }
 }
 
+/// The compact widget's presentation boundary. Keep this tiny production seam separate from the
+/// store so the view's real `.onAppear` wiring can be exercised without pretending an activation
+/// notification is a widget open.
+enum CompactWidgetPresentationBoundary {
+    @MainActor
+    static func appeared(store: UsageStore) {
+        store.refreshAfterWidgetOpen()
+    }
+}
+
 struct CompactMenuView: View {
     @ObservedObject var store: UsageStore
     @Environment(\.openWindow) private var openWindow

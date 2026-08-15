@@ -1,5 +1,29 @@
 import AppKit
+import Foundation
 import SwiftUI
+
+/// Opt-in, in-memory live verification for the compact-widget boundary. It emits only elapsed
+/// milliseconds and event counts; no provider values, paths, identifiers, or credentials.
+enum WidgetOpenMeasurement {
+    private static let enabled = ProcessInfo.processInfo.environment["USAGE_MENU_WIDGET_OPEN_MEASUREMENT"] == "1"
+    private static let startedAt = ContinuousClock.now
+    private static let lock = NSLock()
+    private static var widgetOpenCount = 0
+    private static var acquisitionAttemptCount = 0
+
+    static func record(_ event: AutomaticRefreshEvent) {
+        guard enabled else { return }
+        lock.lock()
+        switch event {
+        case .widgetOpened: widgetOpenCount += 1
+        case .acquisitionAttempt: acquisitionAttemptCount += 1
+        }
+        let elapsed = startedAt.duration(to: .now).components.seconds * 1_000
+        let line = "usage-menu-widget-measurement elapsed_ms=\(Int(elapsed)) event=\(event.rawValue) widget_opens=\(widgetOpenCount) acquisition_attempts=\(acquisitionAttemptCount)\n"
+        lock.unlock()
+        FileHandle.standardError.write(Data(line.utf8))
+    }
+}
 
 /// User-set values that outlive a launch.
 ///
@@ -214,7 +238,8 @@ struct UsageMenuApp: App {
             anthropicSource: anthropicSource,
             mode: mode,
             codexResolution: resolution,
-            rebuildCodexSource: rebuild
+            rebuildCodexSource: rebuild,
+            recordAutomaticRefreshEvent: WidgetOpenMeasurement.record
         )
         AppLifecycle.shared.ownActivationRefresh { store.refreshAfterActivation() }
         _store = StateObject(wrappedValue: store)
@@ -223,6 +248,9 @@ struct UsageMenuApp: App {
     var body: some Scene {
         MenuBarExtra {
             CompactMenuView(store: store)
+                // The compact MenuBarExtra's visible-content boundary is reliable even when this
+                // LSUIElement app stays inactive. The store coalesces recomposition bursts.
+                .onAppear { CompactWidgetPresentationBoundary.appeared(store: store) }
         } label: {
             UsageMenuBarLabel(openDashboardOnLaunch: openDashboardOnLaunch)
         }
