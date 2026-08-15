@@ -1,0 +1,73 @@
+name: CI
+
+# Every push and pull request that targets main is gated on a cold, credential-free
+# build and test of the source tree. Nothing here packages, signs, notarizes,
+# uploads, caches, or reaches a provider.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  macos:
+    name: macOS arm64, Xcode 16.4
+    # actions/runner-images README maps the "macOS 15 Arm64" image to labels
+    # `macos-15` and `macos-15-xlarge`; the x64 macOS 15 image is reached only via
+    # `macos-15-large` or `macos-15-intel`. So `macos-15` is arm64 and explicitly
+    # versioned, unlike `macos-latest`, and unlike `macos-14` it is not deprecated.
+    # arm64 is required because this is a native Apple silicon macOS utility whose
+    # release archive is verified for an arm64 slice: the gate must build and test
+    # on the architecture it ships on. The uname refusal below re-checks at runtime
+    # rather than trusting this label.
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      # Explicitly select an installed Xcode rather than inheriting the image
+      # default. images/macos/macos-15-arm64-Readme.md lists Xcode 16.4 (build
+      # 16F6) at /Applications/Xcode_16.4.app. The step below refuses if the exact
+      # path is absent, so an image change fails loudly instead of silently
+      # falling back to whichever Xcode the image happens to default to.
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - name: Check out source
+        # v7.0.1, the current actions/checkout release. Verified: refs/tags/v7.0.1
+        # and refs/tags/v7 both resolve to this commit via git ls-remote against
+        # https://github.com/actions/checkout.git and via the GitHub refs API.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Assert arm64 runner
+        run: |
+          set -eu
+          echo "uname -m: $(uname -m)"
+          test "$(uname -m)" = arm64
+
+      - name: Report toolchain versions
+        run: |
+          set -eu
+          test -d "$DEVELOPER_DIR" || {
+            echo "REFUSING: selected Xcode is not installed at $DEVELOPER_DIR" >&2
+            exit 1
+          }
+          xcodebuild -version
+          swift --version
+
+      - name: make check
+        run: make check
+
+      - name: make build
+        run: make build

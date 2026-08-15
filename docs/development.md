@@ -19,6 +19,14 @@ Run `make help` for the current command list.
 
 `make check` is the normal pre-change and pre-commit validation. Run it from a fresh worktree when verifying a change that must not depend on local build state.
 
+## Continuous integration
+
+`.github/workflows/ci.yml` gates every push and pull request targeting `main`. It runs on the explicitly versioned GitHub-hosted `macos-15` arm64 image with `DEVELOPER_DIR` pinned to Xcode 16.4, asserts `uname -m` is `arm64`, prints the `xcodebuild` and `swift` versions, then runs `make check` and `make build` as separate steps.
+
+The job holds `contents: read` only, checks out with `persist-credentials: false`, pins `actions/checkout` to a full commit SHA, and cancels superseded pull-request runs. It uses no cache, no pre-existing DerivedData, no Keychain item, no provider credential, and no absolute developer path outside the runner image; live provider tests stay disabled by the default test plan. It never packages, signs, notarizes, or uploads.
+
+The gate mirrors what `make check` does locally, so reproduce a CI failure by running `make check` from a cold detached worktree.
+
 ## Public synchronization path
 
 The section's private local repository remains the source authority and orchestration history. Its commits intentionally have different IDs from the public repository. The public repository is a clean source-only history: its clean root is the base for all future public commits.

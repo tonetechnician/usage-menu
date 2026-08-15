@@ -1,5 +1,7 @@
 # Usage Menu
 
+[![CI](https://github.com/tonetechnician/usage-menu/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tonetechnician/usage-menu/actions/workflows/ci.yml)
+
 Usage Menu is a native macOS menu-bar app for checking the usage limits that supported AI provider sources can actually report.
 
 The menu and dashboard show independent Codex and Claude quota windows, their remaining or used values, reset times when supplied, and an explicit freshness state. This makes the nearest known constraint easy to check without treating unrelated subscriptions, limits, or billing scopes as one number.
