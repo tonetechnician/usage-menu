@@ -20,11 +20,14 @@
 		A10000000000000000000010 /* AnthropicQuotaSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* AnthropicQuotaSource.swift */; };
 		A10000000000000000000022 /* ClaudeRefreshFoundation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* ClaudeRefreshFoundation.swift */; };
 		A10000000000000000000023 /* ClaudeRefreshCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* ClaudeRefreshCoordinator.swift */; };
+		A10000000000000000000026 /* ClaudeOAuthRefreshTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* ClaudeOAuthRefreshTransport.swift */; };
+		A10000000000000000000027 /* ClaudeRefreshingQuotaSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000027 /* ClaudeRefreshingQuotaSource.swift */; };
 		A10000000000000000000011 /* AnthropicQuotaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* AnthropicQuotaTests.swift */; };
 		A10000000000000000000013 /* RedactedDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* RedactedDiagnostics.swift */; };
 		A10000000000000000000014 /* DiagnosticTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* DiagnosticTests.swift */; };
 		A10000000000000000000024 /* ClaudeRefreshFoundationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* ClaudeRefreshFoundationTests.swift */; };
 		A10000000000000000000025 /* ClaudeRefreshCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000025 /* ClaudeRefreshCoordinatorTests.swift */; };
+		A10000000000000000000028 /* ClaudeOAuthRefreshTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000028 /* ClaudeOAuthRefreshTransportTests.swift */; };
 		A10000000000000000000012 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* Security.framework */; };
 /* End PBXBuildFile section */
 
@@ -56,6 +59,9 @@
 		A20000000000000000000025 /* ClaudeRefreshCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeRefreshCoordinatorTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000022 /* ClaudeRefreshFoundation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeRefreshFoundation.swift; sourceTree = "<group>"; };
 		A20000000000000000000023 /* ClaudeRefreshCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeRefreshCoordinator.swift; sourceTree = "<group>"; };
+		A20000000000000000000026 /* ClaudeOAuthRefreshTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeOAuthRefreshTransport.swift; sourceTree = "<group>"; };
+		A20000000000000000000027 /* ClaudeRefreshingQuotaSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeRefreshingQuotaSource.swift; sourceTree = "<group>"; };
+		A20000000000000000000028 /* ClaudeOAuthRefreshTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeOAuthRefreshTransportTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000017 /* DiagnosticTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -81,11 +87,11 @@
 		A70000000000000000000004 /* Domain */ = {isa = PBXGroup; path = Domain; sourceTree = "<group>"; children = (A20000000000000000000002 /* UsageModels.swift */); };
 		A70000000000000000000014 /* Providers */ = {isa = PBXGroup; path = Providers; sourceTree = "<group>"; children = (A70000000000000000000005 /* OpenAI */, A70000000000000000000012 /* Anthropic */); };
 		A70000000000000000000005 /* OpenAI */ = {isa = PBXGroup; path = OpenAI; sourceTree = "<group>"; children = (A20000000000000000000003 /* CodexAppServer.swift */, A20000000000000000000020 /* CodexExecutableDiscovery.swift */); };
-		A70000000000000000000012 /* Anthropic */ = {isa = PBXGroup; path = Anthropic; sourceTree = "<group>"; children = (A20000000000000000000013 /* AnthropicQuotaSource.swift */, A20000000000000000000022 /* ClaudeRefreshFoundation.swift */, A20000000000000000000023 /* ClaudeRefreshCoordinator.swift */); };
+		A70000000000000000000012 /* Anthropic */ = {isa = PBXGroup; path = Anthropic; sourceTree = "<group>"; children = (A20000000000000000000013 /* AnthropicQuotaSource.swift */, A20000000000000000000022 /* ClaudeRefreshFoundation.swift */, A20000000000000000000023 /* ClaudeRefreshCoordinator.swift */, A20000000000000000000026 /* ClaudeOAuthRefreshTransport.swift */, A20000000000000000000027 /* ClaudeRefreshingQuotaSource.swift */); };
 		A70000000000000000000006 /* Store */ = {isa = PBXGroup; path = Store; sourceTree = "<group>"; children = (A20000000000000000000004 /* UsageStore.swift */); };
 		A70000000000000000000008 /* UI */ = {isa = PBXGroup; path = UI; sourceTree = "<group>"; children = (A20000000000000000000005 /* UsageViews.swift */); };
 		A70000000000000000000013 /* Diagnostics */ = {isa = PBXGroup; path = Diagnostics; sourceTree = "<group>"; children = (A20000000000000000000016 /* RedactedDiagnostics.swift */); };
-		A70000000000000000000007 /* UsageMenuTests */ = {isa = PBXGroup; path = UsageMenuTests; sourceTree = "<group>"; children = (A20000000000000000000006 /* CodexProtocolTests.swift */, A20000000000000000000014 /* AnthropicQuotaTests.swift */, A20000000000000000000024 /* ClaudeRefreshFoundationTests.swift */, A20000000000000000000025 /* ClaudeRefreshCoordinatorTests.swift */, A20000000000000000000007 /* UsageStoreTests.swift */, A20000000000000000000017 /* DiagnosticTests.swift */, A20000000000000000000021 /* CodexDiscoveryTests.swift */, A70000000000000000000011 /* Fixtures */); };
+		A70000000000000000000007 /* UsageMenuTests */ = {isa = PBXGroup; path = UsageMenuTests; sourceTree = "<group>"; children = (A20000000000000000000006 /* CodexProtocolTests.swift */, A20000000000000000000014 /* AnthropicQuotaTests.swift */, A20000000000000000000024 /* ClaudeRefreshFoundationTests.swift */, A20000000000000000000025 /* ClaudeRefreshCoordinatorTests.swift */, A20000000000000000000028 /* ClaudeOAuthRefreshTransportTests.swift */, A20000000000000000000007 /* UsageStoreTests.swift */, A20000000000000000000017 /* DiagnosticTests.swift */, A20000000000000000000021 /* CodexDiscoveryTests.swift */, A70000000000000000000011 /* Fixtures */); };
 		A70000000000000000000011 /* Fixtures */ = {isa = PBXGroup; path = Fixtures; sourceTree = "<group>"; children = (A20000000000000000000008 /* fake-codex-app-server.py */); };
 		A70000000000000000000009 /* UsageMenuIntegrationTests */ = {isa = PBXGroup; path = UsageMenuIntegrationTests; sourceTree = "<group>"; children = (A20000000000000000000009 /* SharedSurfaceIntegrationTests.swift */); };
 		A70000000000000000000010 /* Products */ = {isa = PBXGroup; name = Products; sourceTree = "<group>"; children = (A20000000000000000000010 /* UsageMenu.app */, A20000000000000000000011 /* UsageMenuTests.xctest */, A20000000000000000000012 /* UsageMenuIntegrationTests.xctest */); };
@@ -151,8 +157,8 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A90000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000020, A10000000000000000000010, A10000000000000000000022, A10000000000000000000023, A10000000000000000000004, A10000000000000000000005, A10000000000000000000013); runOnlyForDeploymentPostprocessing = 0; };
-		A90000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000006, A10000000000000000000011, A10000000000000000000024, A10000000000000000000025, A10000000000000000000021, A10000000000000000000007, A10000000000000000000014); runOnlyForDeploymentPostprocessing = 0; };
+		A90000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000003, A10000000000000000000020, A10000000000000000000010, A10000000000000000000022, A10000000000000000000023, A10000000000000000000026, A10000000000000000000027, A10000000000000000000004, A10000000000000000000005, A10000000000000000000013); runOnlyForDeploymentPostprocessing = 0; };
+		A90000000000000000000003 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000006, A10000000000000000000011, A10000000000000000000024, A10000000000000000000025, A10000000000000000000028, A10000000000000000000021, A10000000000000000000007, A10000000000000000000014); runOnlyForDeploymentPostprocessing = 0; };
 		A90000000000000000000005 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000009); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 

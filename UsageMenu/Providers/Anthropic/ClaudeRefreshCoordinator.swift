@@ -21,35 +21,39 @@ final class ClaudeRefreshCoordinator {
     /// Executes quota acquisition once, performs at most one silent refresh on an authentication
     /// failure, then retries quota acquisition exactly once after a persisted successful refresh.
     func fetchQuota<T>(_ fetch: () async throws -> T) async throws -> T {
+        // An expired measured file shape is rejected by LocalClaudeCredentialProvider before the
+        // quota request. Refresh it here rather than waiting for a 401 that cannot occur.
+        if let current = try? store.read(), current.session.refreshDecision(now: now()) == .refresh {
+            try await refreshIfEligible(forceAfterProviderAuthFailure: false)
+            return try await fetch()
+        }
         do { return try await fetch() }
-        catch let failure as AnthropicSourceFailure where failure.issue == .anthropicAuthRequired {
-            try await refreshIfEligible()
+        catch let failure as AnthropicSourceFailure where failure.issue == .anthropicAuthRequired || failure.issue == .anthropicCredentialsExpired {
+            try await refreshIfEligible(forceAfterProviderAuthFailure: true)
             return try await fetch()
         }
     }
 
-    private func refreshIfEligible() async throws {
-        let current = try store.read()
-        switch current.session.refreshDecision(now: now()) {
-        case .current:
-            throw AnthropicSourceFailure(.anthropicAuthRequired)
-        case .authRequired:
-            throw AnthropicSourceFailure(.anthropicAuthRequired)
-        case .refresh:
-            do {
-                let refresh = try await flight.run { [refresher] in
-                    try await refresher.refresh(current.session)
+    private func refreshIfEligible(forceAfterProviderAuthFailure: Bool) async throws {
+        do {
+            try await store.withRefreshLock { [store, refresher, now] in
+                let current = try store.read()
+                switch current.session.refreshDecision(now: now()) {
+                case .authRequired:
+                    throw AnthropicSourceFailure(.anthropicAuthRequired)
+                case .current where !forceAfterProviderAuthFailure:
+                    // A sibling rotated while this process waited for the provider lock.
+                    return
+                case .current, .refresh:
+                    let refresh = try await self.flight.run { try await refresher.refresh(current.session) }
+                    _ = try store.replace(expectedData: current.data, with: refresh)
                 }
-                switch try store.replace(expectedData: current.data, with: refresh) {
-                case .saved, .adoptedSibling: return
-                }
-            } catch let failure as ClaudeRefreshFailure where failure == .terminal || failure == .malformed {
-                throw AnthropicSourceFailure(.anthropicAuthRequired)
-            } catch let failure as RedactedIssue {
-                throw AnthropicSourceFailure(failure)
-            } catch {
-                throw AnthropicSourceFailure(.anthropicAuthRequired)
             }
+        } catch let failure as AnthropicSourceFailure { throw failure }
+        catch {
+            // Transport, malformed response, lock/file/write failures never leak details or
+            // leave an ambiguous session state: provider-owned login is the recovery path.
+            throw AnthropicSourceFailure(.anthropicAuthRequired)
         }
     }
 }

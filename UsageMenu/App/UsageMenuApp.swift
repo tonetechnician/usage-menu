@@ -211,7 +211,7 @@ struct UsageMenuApp: App {
                 executablePath: outcome.path ?? "",
                 unresolvedIssue: outcome.issue
             ))
-            anthropicSource = AnthropicQuotaSource()
+            anthropicSource = ClaudeRefreshingQuotaSource()
             mode = .live
             resolution = outcome
         }

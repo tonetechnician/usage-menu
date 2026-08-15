@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// Provider transport is deliberately absent until the provider-owned observation establishes it.
 /// Implementations receive secret material only in request memory.
@@ -107,6 +108,20 @@ final class ClaudeCredentialFileStore {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let session = ClaudeOAuthSession(root: root) else { throw RedactedIssue.anthropicCredentialsInvalid }
         return (data, root, session)
+    }
+
+    func withRefreshLock<T>(timeout: TimeInterval = 5, operation: () async throws -> T) async throws -> T {
+        let lockURL = url.deletingLastPathComponent().appendingPathComponent(".oauth_refresh.lock")
+        let descriptor = open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else { throw ClaudeRefreshFailure.unavailable }
+        defer { close(descriptor) }
+        let deadline = Date().addingTimeInterval(timeout)
+        while flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
+            guard Date() < deadline else { throw ClaudeRefreshFailure.unavailable }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        defer { flock(descriptor, LOCK_UN) }
+        return try await operation()
     }
 
     func replace(expectedData: Data, with refresh: ClaudeOAuthRefresh) throws -> WriteResult {
