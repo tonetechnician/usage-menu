@@ -1,0 +1,37 @@
+#!/bin/sh
+# Deterministic source tests for release identity, naming, and portable checksums.
+set -eu
+
+bin/release-validate
+version=$(tr -d '\r\n' < VERSION)
+zip="UsageMenu-$version-universal-adhoc.zip"
+pkg="UsageMenu-$version-universal-unsigned.pkg"
+test "$zip" = UsageMenu-0.1.0-universal-adhoc.zip
+test "$pkg" = UsageMenu-0.1.0-universal-unsigned.pkg
+
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/usage-menu-release-test.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+printf '1.02.3\n' > "$tmp/VERSION"
+if VERSION_FILE="$tmp/VERSION" bin/release-validate >/dev/null 2>&1; then
+  echo 'REFUSING: malformed version was accepted' >&2
+  exit 1
+fi
+if RELEASE_TAG=v9.9.9 bin/release-validate >/dev/null 2>&1; then
+  echo 'REFUSING: mismatched tag was accepted' >&2
+  exit 1
+fi
+printf '# Changelog\n\n## [Unreleased]\n' > "$tmp/CHANGELOG.md"
+if CHANGELOG_FILE="$tmp/CHANGELOG.md" bin/release-validate >/dev/null 2>&1; then
+  echo 'REFUSING: missing changelog release was accepted' >&2
+  exit 1
+fi
+
+printf 'zip payload\n' > "$tmp/$zip"
+printf 'pkg payload\n' > "$tmp/$pkg"
+(cd "$tmp" && shasum -a 256 "$zip" "$pkg" > SHA256SUMS && shasum -a 256 -c SHA256SUMS)
+test "$(awk 'END { print NR }' "$tmp/SHA256SUMS")" = 2
+awk -v zip="$zip" -v pkg="$pkg" '$2 != zip && $2 != pkg { exit 1 } END { exit NR == 2 ? 0 : 1 }' "$tmp/SHA256SUMS"
+if grep -q / "$tmp/SHA256SUMS"; then
+  echo 'REFUSING: checksum paths are not portable basenames' >&2
+  exit 1
+fi

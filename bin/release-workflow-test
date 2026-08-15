@@ -1,0 +1,20 @@
+#!/usr/bin/env ruby
+# Structural checks keep release publishing isolated from ordinary CI.
+require "yaml"
+workflow = YAML.load_file(".github/workflows/release.yml")
+abort "REFUSING: release trigger must use documented GitHub glob semantics" unless workflow[true].dig("push", "tags") == ["v*.*.*"]
+abort "REFUSING: top-level permissions must be empty" unless workflow["permissions"] == {}
+job = workflow.dig("jobs", "release") or abort "REFUSING: missing release job"
+abort "REFUSING: release runner changed" unless job["runs-on"] == "macos-15"
+abort "REFUSING: release permission is not contents: write" unless job["permissions"] == {"contents" => "write"}
+checkout = job.fetch("steps").find { |step| step["uses"]&.start_with?("actions/checkout@") } or abort "REFUSING: missing checkout"
+abort "REFUSING: checkout is not SHA pinned" unless checkout["uses"] =~ %r{\Aactions/checkout@[0-9a-f]{40}}
+abort "REFUSING: checkout credentials persist" unless checkout.dig("with", "persist-credentials") == false
+steps = job.fetch("steps")
+runs = steps.map { |step| step["run"] }.compact.join("\n")
+%w[make\ validate-release make\ check make\ package gh\ release\ create shasum].each do |required|
+  abort "REFUSING: release workflow lacks #{required}" unless runs.include?(required)
+end
+publish = steps.find { |step| step["name"] == "Publish GitHub release" }&.fetch("run") or abort "REFUSING: missing publish step"
+abort "REFUSING: publish step lacks strict shell mode" unless publish.include?("set -eu")
+abort "REFUSING: publish step relies on a prior step's shell variable" unless publish.include?("version=$(tr -d")

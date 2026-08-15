@@ -25,6 +25,10 @@ open -na .build/DerivedData/Build/Products/Debug/UsageMenu.app
 
 Use `make help` for all supported commands. For a signed-in local Codex source, pass `--codex-path /path/to/codex` when launching the app; `--fixture` explicitly selects deterministic sample data.
 
+## Downloads
+
+Tagged GitHub Releases provide a versioned universal `.zip` containing an ad-hoc-signed app, an **unsigned/not-notarized** installer `.pkg`, and `SHA256SUMS`. macOS may require explicit user approval before opening or installing them. Verify the downloaded checksum before use. The `.pkg` installs `UsageMenu.app` in `/Applications`.
+
 ## More detail
 
 - [Architecture and data flow](docs/architecture.md)

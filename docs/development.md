@@ -14,7 +14,8 @@ Run `make help` for the current command list.
 - `make diagnose` runs redacted diagnostics against local sources.
 - `make diagnose-fixture` runs deterministic redacted diagnostic fixtures.
 - `make live-test CODEX_PATH=/path/to/codex` opts into tests against provider-owned local sessions.
-- `make package` creates and verifies an ad-hoc universal archive in `dist/`.
+- `make validate-release` validates `VERSION`, an optional release tag, and the matching dated changelog heading.
+- `make package` creates and verifies versioned universal ad-hoc `.zip` and unsigned `.pkg` outputs plus `SHA256SUMS` in `dist/`.
 - `make clean` removes `.build/` and `dist/`.
 
 `make check` is the normal pre-change and pre-commit validation. Run it from a fresh worktree when verifying a change that must not depend on local build state.
@@ -26,6 +27,14 @@ Run `make help` for the current command list.
 The job holds `contents: read` only, checks out with `persist-credentials: false`, pins `actions/checkout` to a full commit SHA, and cancels superseded pull-request runs. It uses no cache, no pre-existing DerivedData, no Keychain item, no provider credential, and no absolute developer path outside the runner image; live provider tests stay disabled by the default test plan. It never packages, signs, notarizes, or uploads.
 
 The gate mirrors what `make check` does locally, so reproduce a CI failure by running `make check` from a cold detached worktree.
+
+## Releases
+
+`VERSION` is the sole stable SemVer source and must contain `MAJOR.MINOR.PATCH` without pre-release or build metadata. Update it and add a dated `## [VERSION] - YYYY-MM-DD` section to `CHANGELOG.md` (Keep a Changelog format) before release. `Unreleased` remains at the top.
+
+For a release, validate the source with `make validate-release`, run `make check` and `make package` from a cold tree, then have the release owner create and push exactly `v$(tr -d '\n' < VERSION)` after the public source replay is complete. Only `.github/workflows/release.yml`, triggered by that stable tag, publishes. It selects the pinned arm64/Xcode toolchain, validates and tests the tagged source, packages with `BUNDLE_BUILD` set to the GitHub run number, extracts matching changelog notes, verifies precisely three assets and checksums, refuses an existing release, and uses `gh` to publish. Push/PR CI remains build-and-test only.
+
+Package outputs are `UsageMenu-<version>-universal-adhoc.zip`, `UsageMenu-<version>-universal-unsigned.pkg`, and `SHA256SUMS`. The package installs the same verified universal ad-hoc app into `/Applications`; it is deliberately unsigned and not notarized. No Apple Developer credential, signing identity, or notarization secret is used.
 
 ## Public synchronization path
 
@@ -54,4 +63,4 @@ Keep app implementation in `UsageMenu/`: `App/` lifecycle and composition, `Doma
 
 ## Generated output and packaging
 
-Build products, test results, diagnostic executables, and package intermediates are generated under ignored `.build/`. `make package` writes its verified local archive under ignored `dist/`; it is ad-hoc signed, performs no upload or notarization, and should not be committed. Do not add derived data, app bundles, archives, screenshots, caches, local configuration, or credentials to Git.
+Build products, test results, diagnostic executables, and package intermediates are generated under ignored `.build/`. `make package` writes its verified versioned zip, unsigned pkg, and checksums under ignored `dist/`; it performs no upload or notarization and should not be committed. Do not add derived data, app bundles, archives, screenshots, caches, local configuration, or credentials to Git.

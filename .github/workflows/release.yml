@@ -1,0 +1,80 @@
+name: Release
+
+# GitHub Actions tag filters use glob syntax, not regular expressions. This broad
+# filter starts likely version tags; release-validate strictly refuses every
+# non-vMAJOR.MINOR.PATCH lookalike before packaging or publishing.
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  release:
+    name: macOS arm64 release, Xcode 16.4
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      RELEASE_TAG: ${{ github.ref_name }}
+      BUNDLE_BUILD: ${{ github.run_number }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.ref }}
+
+      - name: Assert arm64 runner and pinned toolchain
+        run: |
+          set -eu
+          test "$(uname -m)" = arm64
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          swift --version
+
+      - name: Validate source and test
+        run: |
+          set -eu
+          make validate-release
+          make check
+
+      - name: Package release assets
+        run: make package
+
+      - name: Verify release assets and notes
+        run: |
+          set -eu
+          version=$(tr -d '\r\n' < VERSION)
+          test "$RELEASE_TAG" = "v$version"
+          zip="dist/UsageMenu-$version-universal-adhoc.zip"
+          pkg="dist/UsageMenu-$version-universal-unsigned.pkg"
+          sums=dist/SHA256SUMS
+          test -f "$zip" && test -f "$pkg" && test -f "$sums"
+          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = 3
+          (cd dist && shasum -a 256 -c SHA256SUMS)
+          awk -v version="$version" '
+            $0 == "## [" version "]" || $0 ~ "^## \[" version "\] - " { capture=1; next }
+            capture && /^## / { exit }
+            capture { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          test -s RELEASE_NOTES.md
+          ! gh release view "$RELEASE_TAG" >/dev/null 2>&1 || { echo "REFUSING: release already exists" >&2; exit 1; }
+
+      - name: Publish GitHub release
+        run: |
+          set -eu
+          version=$(tr -d '\r\n' < VERSION)
+          test "$RELEASE_TAG" = "v$version"
+          gh release create "$RELEASE_TAG" \
+            "dist/UsageMenu-$version-universal-adhoc.zip" \
+            "dist/UsageMenu-$version-universal-unsigned.pkg" \
+            dist/SHA256SUMS \
+            --title "Usage Menu $version" --notes-file RELEASE_NOTES.md

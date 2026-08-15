@@ -16,6 +16,10 @@ Claude Code credential material is read from the local provider boundary, includ
 
 Normalized observations use an opaque account reference where one is necessary. The diagnostic tool reports only redacted provider, window, value, timing, status, and provenance fields. It never emits raw provider responses or authorization data.
 
+## Distribution boundary
+
+Release archives are built with an ad-hoc signature only. The `.zip` and `.pkg` are explicitly unsigned and not notarized, and no Apple Developer signing or notarization credential is used. Users should verify the published `SHA256SUMS`; macOS may require explicit approval before opening the app or installer. The installer package places the app in `/Applications`.
+
 ## Honest failures and freshness
 
 A reading is current only after a successful refresh. Existing readings become stale while their source refreshes or after a source failure; unavailable, unknown, unsupported, and sign-in-required states are shown explicitly. A stale, unavailable, unsupported, or unknown reading is never rendered as zero or current.
