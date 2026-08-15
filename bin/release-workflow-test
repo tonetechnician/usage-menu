@@ -2,19 +2,57 @@
 # Structural checks keep release publishing isolated from ordinary CI.
 require "yaml"
 workflow = YAML.load_file(".github/workflows/release.yml")
-abort "REFUSING: release trigger must use documented GitHub glob semantics" unless workflow[true].dig("push", "tags") == ["v*.*.*"]
+trigger = workflow[true] or abort "REFUSING: missing release trigger"
+abort "REFUSING: release trigger must use documented GitHub glob semantics" unless trigger.dig("push", "tags") == ["v*.*.*"]
+dispatch = trigger["workflow_dispatch"] or abort "REFUSING: missing recovery workflow_dispatch trigger"
+input = dispatch.dig("inputs", "release_tag") or abort "REFUSING: missing recovery release_tag input"
+abort "REFUSING: recovery release_tag input must be required string" unless input["required"] == true && input["type"] == "string"
+abort "REFUSING: recovery input is documented as an alternate versioning path" unless input["description"].include?("Existing stable tag")
 abort "REFUSING: top-level permissions must be empty" unless workflow["permissions"] == {}
 job = workflow.dig("jobs", "release") or abort "REFUSING: missing release job"
 abort "REFUSING: release runner changed" unless job["runs-on"] == "macos-15"
 abort "REFUSING: release permission is not contents: write" unless job["permissions"] == {"contents" => "write"}
-checkout = job.fetch("steps").find { |step| step["uses"]&.start_with?("actions/checkout@") } or abort "REFUSING: missing checkout"
-abort "REFUSING: checkout is not SHA pinned" unless checkout["uses"] =~ %r{\Aactions/checkout@[0-9a-f]{40}}
-abort "REFUSING: checkout credentials persist" unless checkout.dig("with", "persist-credentials") == false
+env = job.fetch("env")
+abort "REFUSING: release tag does not select dispatch input" unless env["RELEASE_TAG"] == "${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}"
 steps = job.fetch("steps")
-runs = steps.map { |step| step["run"] }.compact.join("\n")
-%w[make\ validate-release make\ check make\ package gh\ release\ create shasum].each do |required|
-  abort "REFUSING: release workflow lacks #{required}" unless runs.include?(required)
+recovery_input = steps.find { |step| step["name"] == "Validate recovery tag input" } or abort "REFUSING: missing recovery input validation"
+abort "REFUSING: recovery input validation is not dispatch-only" unless recovery_input["if"] == "github.event_name == 'workflow_dispatch'"
+abort "REFUSING: recovery input does not validate stable SemVer" unless recovery_input.fetch("run").include?("grep -Eq '^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$'")
+
+checkouts = steps.select { |step| step["uses"]&.start_with?("actions/checkout@") }
+abort "REFUSING: release requires isolated tool and source checkouts" unless checkouts.length == 2
+checkouts.each do |checkout|
+  abort "REFUSING: checkout is not SHA pinned" unless checkout["uses"] =~ %r{\Aactions/checkout@[0-9a-f]{40}}
+  abort "REFUSING: checkout credentials persist" unless checkout.dig("with", "persist-credentials") == false
 end
-publish = steps.find { |step| step["name"] == "Publish GitHub release" }&.fetch("run") or abort "REFUSING: missing publish step"
+tools = steps.find { |step| step["name"] == "Check out workflow tooling" } or abort "REFUSING: missing workflow tooling checkout"
+abort "REFUSING: tooling checkout does not use its isolated path" unless tools.dig("with", "path") == "release-tools"
+abort "REFUSING: tooling checkout is not pinned to the workflow SHA" unless tools.dig("with", "ref") == "${{ github.sha }}"
+source = steps.find { |step| step["name"] == "Check out tagged release source" } or abort "REFUSING: missing tagged source checkout"
+abort "REFUSING: tagged source checkout does not use its isolated path" unless source.dig("with", "path") == "release-source"
+expected_ref = "${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_tag) || github.ref }}"
+abort "REFUSING: source checkout does not select the exact dispatch tag" unless source.dig("with", "ref") == expected_ref
+commits = steps.find { |step| step["name"] == "Assert isolated checkout commits" }&.fetch("run") or abort "REFUSING: missing isolated checkout assertion"
+["git -C release-tools rev-parse HEAD", '"$GITHUB_SHA"', "git -C release-source rev-parse \"$RELEASE_TAG^{commit}\"", "git -C release-source rev-parse HEAD"].each do |required|
+  abort "REFUSING: checkout assertion lacks #{required}" unless commits.include?(required)
+end
+
+validate = steps.find { |step| step["name"] == "Validate source and test" } or abort "REFUSING: missing source validation"
+abort "REFUSING: validation does not run only against tagged source" unless validate["working-directory"] == "release-source"
+abort "REFUSING: validation lacks release validation and check" unless validate.fetch("run").include?("make validate-release") && validate.fetch("run").include?("make check")
+package = steps.find { |step| step["name"] == "Package release assets" } or abort "REFUSING: missing source packaging"
+abort "REFUSING: packaging does not run only against tagged source" unless package["working-directory"] == "release-source" && package["run"] == "make package"
+verify = steps.find { |step| step["name"] == "Verify tagged release assets and notes" }&.fetch("run") or abort "REFUSING: missing verification step"
+["set -eu", "release-source/VERSION", 'test "$RELEASE_TAG" = "v$version"', "release-source/dist", "release-tools/bin/release-notes", "release-source/CHANGELOG.md", "gh release view"].each do |required|
+  abort "REFUSING: verification lacks #{required}" unless verify.include?(required)
+end
+
+publish_steps = steps.select { |step| step["run"]&.include?("gh release create") }
+abort "REFUSING: release workflow has an unreviewed publication path" unless publish_steps.length == 1
+publish = publish_steps.first.fetch("run")
 abort "REFUSING: publish step lacks strict shell mode" unless publish.include?("set -eu")
-abort "REFUSING: publish step relies on a prior step's shell variable" unless publish.include?("version=$(tr -d")
+abort "REFUSING: publish reads version from tagged source" unless publish.include?("release-source/VERSION")
+%w[release-source/dist/UsageMenu-$version-universal-adhoc.zip release-source/dist/UsageMenu-$version-universal-unsigned.pkg release-source/dist/SHA256SUMS].each do |asset|
+  abort "REFUSING: publish does not use tagged-source asset #{asset}" unless publish.include?(asset)
+end
+abort "REFUSING: publication could use main packaging output" if publish.match?(%r{(?<!release-source/)dist/})

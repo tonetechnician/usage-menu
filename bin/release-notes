@@ -1,0 +1,68 @@
+#!/bin/sh
+# Extract one dated changelog section without interpreting a version as a regex.
+set -eu
+
+if test "$#" != 2; then
+  echo "usage: $0 VERSION CHANGELOG.md" >&2
+  exit 2
+fi
+
+version=$1
+changelog=$2
+header="## [$version] - "
+tmp=$(mktemp "${TMPDIR:-/tmp}/usage-menu-release-notes.XXXXXX")
+trap 'rm -f "$tmp"' EXIT HUP INT TERM
+
+found=0
+capturing=0
+body=0
+pending_blank=0
+
+while IFS= read -r line || test -n "$line"; do
+  case "$line" in
+    "$header"[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9])
+      if test "$found" = 1; then
+        echo "REFUSING: duplicate changelog section for [$version]" >&2
+        exit 1
+      fi
+      found=1
+      capturing=1
+      continue
+      ;;
+  esac
+
+  case "$line" in
+    '## '*)
+      capturing=0
+      ;;
+  esac
+
+  if test "$capturing" = 1; then
+    case "$line" in
+      *[![:space:]]*)
+        while test "$pending_blank" -gt 0; do
+          printf '\n' >> "$tmp"
+          pending_blank=$((pending_blank - 1))
+        done
+        printf '%s\n' "$line" >> "$tmp"
+        body=1
+        ;;
+      *)
+        if test "$body" = 1; then
+          pending_blank=$((pending_blank + 1))
+        fi
+        ;;
+    esac
+  fi
+done < "$changelog"
+
+if test "$found" != 1; then
+  echo "REFUSING: missing changelog section for [$version]" >&2
+  exit 1
+fi
+if test "$body" != 1; then
+  echo "REFUSING: empty changelog section for [$version]" >&2
+  exit 1
+fi
+
+cat "$tmp"

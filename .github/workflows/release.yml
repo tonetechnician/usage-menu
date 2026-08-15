@@ -7,6 +7,12 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing stable tag to recover or rerun (for example v0.1.0)
+        required: true
+        type: string
 
 permissions: {}
 
@@ -23,14 +29,36 @@ jobs:
       contents: write
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
       BUNDLE_BUILD: ${{ github.run_number }}
     steps:
-      - name: Check out tagged source
+      - name: Validate recovery tag input
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -eu
+          printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+
+      # Keep release tooling at the workflow commit. This is deliberately
+      # separate from recovery source, which may predate that tooling.
+      - name: Check out workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.ref }}
+          ref: ${{ github.sha }}
+          path: release-tools
+
+      - name: Check out tagged release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
+          path: release-source
+
+      - name: Assert isolated checkout commits
+        run: |
+          set -eu
+          test "$(git -C release-tools rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C release-source rev-parse "$RELEASE_TAG^{commit}")" = "$(git -C release-source rev-parse HEAD)"
 
       - name: Assert arm64 runner and pinned toolchain
         run: |
@@ -41,40 +69,38 @@ jobs:
           swift --version
 
       - name: Validate source and test
+        working-directory: release-source
         run: |
           set -eu
           make validate-release
           make check
 
       - name: Package release assets
+        working-directory: release-source
         run: make package
 
-      - name: Verify release assets and notes
+      - name: Verify tagged release assets and notes
         run: |
           set -eu
-          version=$(tr -d '\r\n' < VERSION)
+          version=$(tr -d '\r\n' < release-source/VERSION)
           test "$RELEASE_TAG" = "v$version"
-          zip="dist/UsageMenu-$version-universal-adhoc.zip"
-          pkg="dist/UsageMenu-$version-universal-unsigned.pkg"
-          sums=dist/SHA256SUMS
+          zip="release-source/dist/UsageMenu-$version-universal-adhoc.zip"
+          pkg="release-source/dist/UsageMenu-$version-universal-unsigned.pkg"
+          sums=release-source/dist/SHA256SUMS
           test -f "$zip" && test -f "$pkg" && test -f "$sums"
-          test "$(find dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = 3
-          (cd dist && shasum -a 256 -c SHA256SUMS)
-          awk -v version="$version" '
-            $0 == "## [" version "]" || $0 ~ "^## \[" version "\] - " { capture=1; next }
-            capture && /^## / { exit }
-            capture { print }
-          ' CHANGELOG.md > RELEASE_NOTES.md
+          test "$(find release-source/dist -maxdepth 1 -type f | wc -l | tr -d ' ')" = 3
+          (cd release-source/dist && shasum -a 256 -c SHA256SUMS)
+          release-tools/bin/release-notes "$version" release-source/CHANGELOG.md > RELEASE_NOTES.md
           test -s RELEASE_NOTES.md
           ! gh release view "$RELEASE_TAG" >/dev/null 2>&1 || { echo "REFUSING: release already exists" >&2; exit 1; }
 
       - name: Publish GitHub release
         run: |
           set -eu
-          version=$(tr -d '\r\n' < VERSION)
+          version=$(tr -d '\r\n' < release-source/VERSION)
           test "$RELEASE_TAG" = "v$version"
           gh release create "$RELEASE_TAG" \
-            "dist/UsageMenu-$version-universal-adhoc.zip" \
-            "dist/UsageMenu-$version-universal-unsigned.pkg" \
-            dist/SHA256SUMS \
+            "release-source/dist/UsageMenu-$version-universal-adhoc.zip" \
+            "release-source/dist/UsageMenu-$version-universal-unsigned.pkg" \
+            release-source/dist/SHA256SUMS \
             --title "Usage Menu $version" --notes-file RELEASE_NOTES.md

@@ -35,3 +35,30 @@ if grep -q / "$tmp/SHA256SUMS"; then
   echo 'REFUSING: checksum paths are not portable basenames' >&2
   exit 1
 fi
+
+notes="$tmp/RELEASE_NOTES.md"
+bin/release-notes "$version" CHANGELOG.md > "$notes"
+grep -Fqx '### Added' "$notes"
+grep -Fqx -- '- A macOS menu-bar view and dashboard for independently reported Codex and Claude Code quota windows.' "$notes"
+! grep -Fq '## [Unreleased]' "$notes"
+
+printf '%s\n' '# Changelog' '' '## [9.9.9] - 2026-08-15' '' 'body' > "$tmp/missing.md"
+if bin/release-notes "$version" "$tmp/missing.md" >/dev/null 2>&1; then
+  echo 'REFUSING: missing notes section was accepted' >&2
+  exit 1
+fi
+
+printf '%s\n' '# Changelog' '' "## [$version] - 2026-08-15" '' 'first body' '' "## [$version] - 2026-08-16" '' 'second body' > "$tmp/duplicate.md"
+if bin/release-notes "$version" "$tmp/duplicate.md" >/dev/null 2>&1; then
+  echo 'REFUSING: duplicate notes section was accepted' >&2
+  exit 1
+fi
+
+printf '%s\n' '# Changelog' '' "## [$version] - 2026-08-15" '' '   ' '' '## [9.9.9] - 2026-08-16' '' 'next body' > "$tmp/empty.md"
+if bin/release-notes "$version" "$tmp/empty.md" >/dev/null 2>&1; then
+  echo 'REFUSING: empty notes section was accepted' >&2
+  exit 1
+fi
+
+printf '%s\n' '# Changelog' '' '## [9.9.8] - 2026-08-14' '' 'previous body' '' "## [$version] - 2026-08-15" '' 'target body' '' '## [9.9.9] - 2026-08-16' '' 'next body' > "$tmp/adjacent.md"
+test "$(bin/release-notes "$version" "$tmp/adjacent.md")" = 'target body'

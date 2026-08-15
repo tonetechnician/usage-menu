@@ -34,6 +34,8 @@ The gate mirrors what `make check` does locally, so reproduce a CI failure by ru
 
 For a release, validate the source with `make validate-release`, run `make check` and `make package` from a cold tree, then have the release owner create and push exactly `v$(tr -d '\n' < VERSION)` after the public source replay is complete. Only `.github/workflows/release.yml`, triggered by that stable tag, publishes. It selects the pinned arm64/Xcode toolchain, validates and tests the tagged source, packages with `BUNDLE_BUILD` set to the GitHub run number, extracts matching changelog notes, verifies precisely three assets and checksums, refuses an existing release, and uses `gh` to publish. Push/PR CI remains build-and-test only.
 
+`workflow_dispatch` is solely a recovery or rerun path for an **existing** stable tag whose release was not published. Enter that existing `release_tag`; the workflow validates it, checks out `refs/tags/<release_tag>`, and refuses to overwrite an existing GitHub Release. It is not an alternate versioning or tag-creation path.
+
 Package outputs are `UsageMenu-<version>-universal-adhoc.zip`, `UsageMenu-<version>-universal-unsigned.pkg`, and `SHA256SUMS`. The package installs the same verified universal ad-hoc app into `/Applications`; it is deliberately unsigned and not notarized. No Apple Developer credential, signing identity, or notarization secret is used.
 
 ## Public synchronization path
