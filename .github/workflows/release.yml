@@ -92,9 +92,26 @@ jobs:
           (cd release-source/dist && shasum -a 256 -c SHA256SUMS)
           release-tools/bin/release-notes "$version" release-source/CHANGELOG.md > RELEASE_NOTES.md
           test -s RELEASE_NOTES.md
-          ! gh release view "$RELEASE_TAG" >/dev/null 2>&1 || { echo "REFUSING: release already exists" >&2; exit 1; }
+
+      # gh exits non-zero both when the release is absent and when gh itself
+      # fails, so only its exact not-found answer permits publication.
+      - name: Refuse an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          if view=$(gh release view "$RELEASE_TAG" --json tagName 2>&1); then
+            echo "REFUSING: release $RELEASE_TAG already exists" >&2
+            exit 1
+          fi
+          if [ "$view" != "release not found" ]; then
+            echo "REFUSING: cannot establish whether release $RELEASE_TAG exists: $view" >&2
+            exit 1
+          fi
 
       - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
           version=$(tr -d '\r\n' < release-source/VERSION)

@@ -43,7 +43,7 @@ abort "REFUSING: validation lacks release validation and check" unless validate.
 package = steps.find { |step| step["name"] == "Package release assets" } or abort "REFUSING: missing source packaging"
 abort "REFUSING: packaging does not run only against tagged source" unless package["working-directory"] == "release-source" && package["run"] == "make package"
 verify = steps.find { |step| step["name"] == "Verify tagged release assets and notes" }&.fetch("run") or abort "REFUSING: missing verification step"
-["set -eu", "release-source/VERSION", 'test "$RELEASE_TAG" = "v$version"', "release-source/dist", "release-tools/bin/release-notes", "release-source/CHANGELOG.md", "gh release view"].each do |required|
+["set -eu", "release-source/VERSION", 'test "$RELEASE_TAG" = "v$version"', "release-source/dist", "release-tools/bin/release-notes", "release-source/CHANGELOG.md"].each do |required|
   abort "REFUSING: verification lacks #{required}" unless verify.include?(required)
 end
 
@@ -56,3 +56,42 @@ abort "REFUSING: publish reads version from tagged source" unless publish.includ
   abort "REFUSING: publish does not use tagged-source asset #{asset}" unless publish.include?(asset)
 end
 abort "REFUSING: publication could use main packaging output" if publish.match?(%r{(?<!release-source/)dist/})
+
+gh_steps = steps.select { |step| step["run"]&.match?(/(?:^|[\s;&|!(])gh\s/) }
+gh_steps.each do |step|
+  abort "REFUSING: gh step #{step["name"]} lacks GH_TOKEN from github.token" unless step.dig("env", "GH_TOKEN") == "${{ github.token }}"
+end
+abort "REFUSING: GH_TOKEN reaches a step that does not run gh" unless (steps - gh_steps).none? { |step| step.dig("env", "GH_TOKEN") }
+
+guard = steps.find { |step| step["name"] == "Refuse an existing release" }&.fetch("run") or abort "REFUSING: missing existing-release guard"
+abort "REFUSING: existing-release guard does not run before publication" unless steps.index { |step| step["name"] == "Refuse an existing release" } < steps.index(publish_steps.first)
+
+require "open3"
+require "tmpdir"
+# The guard runs against a stub gh: it must refuse an existing release, fail on any
+# other gh error, and pass only when gh reports the release is not found.
+def run_guard(guard, gh_exit, gh_stderr)
+  Dir.mktmpdir do |dir|
+    File.write(File.join(dir, "gh"), <<~SH, perm: 0o755)
+      #!/bin/sh
+      printf '%s\\n' "$*" > "#{dir}/gh-args"
+      printf '%s\\n' '#{gh_stderr}' >&2
+      exit #{gh_exit}
+    SH
+    File.write(File.join(dir, "guard.sh"), guard)
+    env = {"PATH" => "#{dir}:#{ENV.fetch("PATH")}", "RELEASE_TAG" => "v9.8.7"}
+    _out, err, status = Open3.capture3(env, "bash", "--noprofile", "--norc", "-eo", "pipefail", File.join(dir, "guard.sh"))
+    args = File.exist?(File.join(dir, "gh-args")) ? File.read(File.join(dir, "gh-args")) : ""
+    [status.success?, err, args]
+  end
+end
+
+ok, err, args = run_guard(guard, 0, "")
+abort "REFUSING: guard permits an existing release" if ok
+abort "REFUSING: guard does not name an existing release" unless err.include?("already exists")
+abort "REFUSING: guard does not view the release tag" unless args.start_with?("release view v9.8.7")
+ok, err, = run_guard(guard, 4, "gh: To use GitHub CLI in a GitHub Actions workflow, set the GH_TOKEN environment variable.")
+abort "REFUSING: guard permits a gh failure" if ok
+abort "REFUSING: guard reports a gh failure as an existing release" if err.include?("already exists")
+ok, err, = run_guard(guard, 1, "release not found")
+abort "REFUSING: guard refuses a release that does not exist: #{err}" unless ok
