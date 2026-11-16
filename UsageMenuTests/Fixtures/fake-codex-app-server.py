@@ -13,9 +13,15 @@ pid_path = os.environ.get("FAKE_CODEX_PID_PATH")
 record_path = os.environ.get("FAKE_CODEX_RECORD_PATH")
 private_value = os.environ.get("FAKE_PRIVATE_VALUE", "fixture-identity")
 
+def publish(path, text):
+    # Readers poll for existence; os.replace never exposes a created-but-empty file.
+    temporary = f"{path}.{os.getpid()}.tmp"
+    with open(temporary, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    os.replace(temporary, path)
+
 if pid_path:
-    with open(pid_path, "w", encoding="utf-8") as handle:
-        handle.write(str(os.getpid()))
+    publish(pid_path, str(os.getpid()))
 
 if scenario == "malformed":
     os.write(1, b"{not-json}\n")
@@ -37,8 +43,7 @@ records = []
 
 def persist_records():
     if record_path:
-        with open(record_path, "w", encoding="utf-8") as handle:
-            json.dump(records, handle, separators=(",", ":"))
+        publish(record_path, json.dumps(records, separators=(",", ":")))
 
 def emit(value, fragmented=False, prefix=None):
     payload = json.dumps(value, separators=(",", ":")).encode("utf-8") + b"\n"
