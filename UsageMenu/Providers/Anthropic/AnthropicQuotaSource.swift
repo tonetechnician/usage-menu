@@ -83,43 +83,42 @@ final class LocalClaudeCredentialProvider: ClaudeCredentialProviding {
         return Self.fallbackKeychainAccount
     }
 
+    /// Claude Code's own read order: the Keychain item, and the file only when no item exists.
+    /// A denied Keychain read is reported, never masked by a file that Claude Code would not use.
     func readCredential() throws -> ClaudeCredential {
-        var fileIssue: RedactedIssue?
-        let fileURL = credentialFileURL
-        if fileManager.fileExists(atPath: fileURL.path) {
-            do {
-                let attributes = try fileManager.attributesOfItem(atPath: fileURL.path)
-                guard let size = attributes[.size] as? NSNumber,
-                      size.intValue > 0, size.intValue <= maximumCredentialBytes else {
-                    throw RedactedIssue.anthropicCredentialsInvalid
-                }
-                let data = try Data(contentsOf: fileURL, options: [])
-                guard data.count <= maximumCredentialBytes else {
-                    throw RedactedIssue.anthropicCredentialsInvalid
-                }
-                return try Self.decodeCredential(data)
-            } catch let issue as RedactedIssue {
-                fileIssue = issue
-            } catch {
-                fileIssue = .anthropicCredentialsInvalid
-            }
-        }
-
+        let keychainData: Data?
         do {
-            if let data = try keychain.read(service: Self.keychainService, account: keychainAccount) {
-                guard data.count > 0, data.count <= maximumCredentialBytes else {
-                    throw RedactedIssue.anthropicCredentialsInvalid
-                }
-                return try Self.decodeCredential(data)
-            }
-        } catch let issue as RedactedIssue {
-            if issue == .anthropicKeychainDenied { throw issue }
-            if fileIssue == nil { fileIssue = issue }
+            keychainData = try keychain.read(service: Self.keychainService, account: keychainAccount)
         } catch {
             throw RedactedIssue.anthropicKeychainDenied
         }
+        if let data = keychainData {
+            guard data.count > 0, data.count <= maximumCredentialBytes else {
+                throw RedactedIssue.anthropicCredentialsInvalid
+            }
+            return try Self.decodeCredential(data)
+        }
 
-        throw fileIssue ?? RedactedIssue.anthropicCredentialsMissing
+        let fileURL = credentialFileURL
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            throw RedactedIssue.anthropicCredentialsMissing
+        }
+        do {
+            let attributes = try fileManager.attributesOfItem(atPath: fileURL.path)
+            guard let size = attributes[.size] as? NSNumber,
+                  size.intValue > 0, size.intValue <= maximumCredentialBytes else {
+                throw RedactedIssue.anthropicCredentialsInvalid
+            }
+            let data = try Data(contentsOf: fileURL, options: [])
+            guard data.count <= maximumCredentialBytes else {
+                throw RedactedIssue.anthropicCredentialsInvalid
+            }
+            return try Self.decodeCredential(data)
+        } catch let issue as RedactedIssue {
+            throw issue
+        } catch {
+            throw RedactedIssue.anthropicCredentialsInvalid
+        }
     }
 
     private static func decodeCredential(_ data: Data) throws -> ClaudeCredential {

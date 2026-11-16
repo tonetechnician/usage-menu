@@ -20,7 +20,7 @@ final class AnthropicQuotaTests: XCTestCase {
 
         _ = try provider.readCredential()
 
-        XCTAssertTrue(keychain.calls.isEmpty)
+        XCTAssertEqual(keychain.calls.count, 1)
         XCTAssertEqual(provider.credentialFileURL, directory.appendingPathComponent(".credentials.json"))
     }
 
@@ -94,6 +94,50 @@ final class AnthropicQuotaTests: XCTestCase {
         ).readCredential()) {
             XCTAssertEqual($0 as? RedactedIssue, .anthropicKeychainDenied)
         }
+    }
+
+    func testKeychainItemWinsOverFileAndNothingIsWrittenUnderClaudeConfig() async throws {
+        let directory = try temporaryDirectory()
+        try writeCredential(["claudeAiOauth": ["accessToken": "file-token"]], to: directory)
+        let blob = try JSONSerialization.data(withJSONObject: ["claudeAiOauth": ["accessToken": "keychain-token"]])
+
+        let request = try await authorizedRequest(configDirectory: directory, keychain: FakeKeychain(.success(blob)))
+
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer keychain-token")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), [".credentials.json"])
+    }
+
+    func testFileIsReadOnlyWhenKeychainHasNoItem() async throws {
+        let directory = try temporaryDirectory()
+        try writeCredential(["claudeAiOauth": ["accessToken": "file-token"]], to: directory)
+
+        let request = try await authorizedRequest(configDirectory: directory, keychain: FakeKeychain(.success(nil)))
+
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer file-token")
+    }
+
+    func testKeychainDenialStaysDistinctAndNeverFallsBackToFile() async throws {
+        let directory = try temporaryDirectory()
+        try writeCredential(["claudeAiOauth": ["accessToken": "file-token"]], to: directory)
+
+        let failure = try await sourceFailure(
+            configDirectory: directory,
+            keychain: FakeKeychain(.failure(RedactedIssue.anthropicKeychainDenied))
+        )
+
+        XCTAssertEqual(failure, AnthropicSourceFailure(.anthropicKeychainDenied))
+    }
+
+    func testExpiredKeychainTokenRequiresLoginWithoutRequestOrFileFallback() async throws {
+        let directory = try temporaryDirectory()
+        try writeCredential(["claudeAiOauth": ["accessToken": "file-token", "expiresAt": 2_000_000_000_000]], to: directory)
+        let blob = try JSONSerialization.data(withJSONObject: [
+            "claudeAiOauth": ["accessToken": "keychain-token", "expiresAt": 1_700_000_000_000]
+        ])
+
+        let failure = try await sourceFailure(configDirectory: directory, keychain: FakeKeychain(.success(blob)))
+
+        XCTAssertEqual(failure, AnthropicSourceFailure(.anthropicCredentialsExpired))
     }
 
     func testKeychainQueryPinsServiceAndSafeCurrentAccount() throws {
@@ -268,6 +312,32 @@ final class AnthropicQuotaTests: XCTestCase {
             operatingSystemUsername: { "fixture-os-user" },
             maximumCredentialBytes: maximumBytes
         )
+    }
+
+    private func authorizedRequest(configDirectory: URL, keychain: ClaudeKeychainReading) async throws -> URLRequest {
+        let transport = FakeTransport(result: .success(response(status: 200, object: ["five_hour": ["utilization": 12]])))
+        let source = AnthropicQuotaSource(
+            credentials: credentialProvider(configDirectory: configDirectory, keychain: keychain),
+            network: transport
+        )
+        _ = try await source.fetch()
+        return try XCTUnwrap(transport.requests.first)
+    }
+
+    private func sourceFailure(configDirectory: URL, keychain: ClaudeKeychainReading) async throws -> AnthropicSourceFailure? {
+        let transport = FakeTransport(result: .success(response(status: 200, object: ["five_hour": ["utilization": 12]])))
+        let source = AnthropicQuotaSource(
+            credentials: credentialProvider(configDirectory: configDirectory, keychain: keychain),
+            network: transport
+        )
+        do {
+            _ = try await source.fetch()
+            XCTFail("fetch succeeded")
+            return nil
+        } catch {
+            XCTAssertTrue(transport.requests.isEmpty)
+            return error as? AnthropicSourceFailure
+        }
     }
 
     private func writeCredential(_ object: [String: Any], to directory: URL) throws {

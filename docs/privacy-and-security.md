@@ -12,7 +12,7 @@ The app does not scrape websites, automate dashboards, extract browser cookies, 
 
 ## Local boundaries and redaction
 
-Claude Code credential material is read from the local provider boundary, including Keychain when needed. Raw credentials, authorization headers, account emails and identifiers, private responses, prompts, and conversation content must not enter app preferences, logs, caches, diagnostics, fixtures, crash metadata, command arguments, or source control.
+Claude Code credential material is read in Claude Code's own order: the `Claude Code-credentials` Keychain item first, and the Claude config `.credentials.json` file only when the Keychain has no item. A Keychain denial is reported as its own state and never falls back to the file. Usage Menu never creates, locks, or writes anything in the Claude config directory, and an expired sign-in is shown as sign-in required until Claude Code renews it. Raw credentials, authorization headers, account emails and identifiers, private responses, prompts, and conversation content must not enter app preferences, logs, caches, diagnostics, fixtures, crash metadata, command arguments, or source control.
 
 Normalized observations use an opaque account reference where one is necessary. The diagnostic tool reports only redacted provider, window, value, timing, status, and provenance fields. It never emits raw provider responses or authorization data.
 

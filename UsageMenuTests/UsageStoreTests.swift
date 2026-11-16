@@ -109,6 +109,18 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(store.anthropicReadings.first?.state, .authRequired(.anthropicAuthRequired))
     }
 
+    func testExpiredClaudeSignInIsAuthRequiredAndNeverCurrent() async throws {
+        let codexSnapshot = await fixtureCodexSnapshot()
+        let store = UsageStore(
+            codexSource: ScriptedCodexSource(results: [.success(codexSnapshot)]),
+            anthropicSource: ScriptedAnthropicSource(results: [.failure(AnthropicSourceFailure(.anthropicCredentialsExpired))]),
+            mode: .live
+        )
+        await store.refresh()
+        XCTAssertEqual(store.anthropicReadings.map(\.id), [.anthropicStatus])
+        XCTAssertEqual(store.anthropicReadings.first?.state, .authRequired(.anthropicCredentialsExpired))
+    }
+
     func testProviderFailuresRemainIsolatedAndOpenAIAlwaysComesFirst() async throws {
         let codexSnapshot = await fixtureCodexSnapshot()
         let anthropicSnapshot = try anthropicSnapshot(sessionReset: 1_900_010_000, weeklyReset: 1_900_020_000)
