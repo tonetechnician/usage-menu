@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import XCTest
 @testable import UsageMenu
@@ -163,14 +164,10 @@ final class UsageStoreTests: XCTestCase {
     func testWidgetOpenBurstDebouncesToOneRefreshAndMarksPriorReadingsNonCurrentUntilSuccess() async throws {
         let initialCodex = await fixtureCodexSnapshot()
         let initialAnthropic = try await FixtureAnthropicSource().fetch()
-        let codex = ScriptedCodexSource(
-            results: [.success(initialCodex), .success(initialCodex)],
-            delayNanoseconds: 150_000_000
-        )
-        let anthropic = ScriptedAnthropicSource(
-            results: [.success(initialAnthropic), .success(initialAnthropic)],
-            delayNanoseconds: 150_000_000
-        )
+        let codexGate = FetchGate()
+        let anthropicGate = FetchGate()
+        let codex = ScriptedCodexSource(results: [.success(initialCodex), .success(initialCodex)], gate: codexGate)
+        let anthropic = ScriptedAnthropicSource(results: [.success(initialAnthropic), .success(initialAnthropic)], gate: anthropicGate)
         let store = UsageStore(
             codexSource: codex,
             anthropicSource: anthropic,
@@ -179,10 +176,13 @@ final class UsageStoreTests: XCTestCase {
         )
 
         await store.refresh()
+        await codexGate.close()
+        await anthropicGate.close()
         store.refreshAfterWidgetOpen()
         store.refreshAfterWidgetOpen()
         store.refreshAfterWidgetOpen()
-        for _ in 0..<20 where codex.callCount < 2 || anthropic.callCount < 2 { await Task.yield() }
+        await codexGate.waitForEntries(2)
+        await anthropicGate.waitForEntries(2)
 
         XCTAssertTrue(store.isRefreshing)
         XCTAssertEqual(store.session.statusName, "stale")
@@ -192,7 +192,9 @@ final class UsageStoreTests: XCTestCase {
         XCTAssertEqual(codex.callCount, 2, "one initial and one coalesced widget-open fetch")
         XCTAssertEqual(anthropic.callCount, 2, "one initial and one coalesced widget-open fetch")
 
-        while store.isRefreshing { await Task.yield() }
+        await codexGate.open()
+        await anthropicGate.open()
+        await store.waitUntilIdle()
         XCTAssertEqual(store.session.statusName, "current")
         XCTAssertEqual(store.weekly.statusName, "current")
         XCTAssertTrue(store.anthropicReadings.allSatisfy { $0.state.statusName == "current" })
@@ -203,9 +205,11 @@ final class UsageStoreTests: XCTestCase {
     func testWidgetOpenFailurePreservesOnlyProviderSpecificPriorObservationsAsStale() async throws {
         let codexSnapshot = await fixtureCodexSnapshot()
         let anthropicSnapshot = try anthropicSnapshot(sessionReset: 1_900_010_000, weeklyReset: 1_900_020_000)
+        let codexGate = FetchGate()
+        let anthropicGate = FetchGate()
         let store = UsageStore(
-            codexSource: ScriptedCodexSource(results: [.success(codexSnapshot), .failure(RedactedIssue.processExited)]),
-            anthropicSource: ScriptedAnthropicSource(results: [.success(anthropicSnapshot), .failure(AnthropicSourceFailure(.anthropicTimeout))]),
+            codexSource: ScriptedCodexSource(results: [.success(codexSnapshot), .failure(RedactedIssue.processExited)], gate: codexGate),
+            anthropicSource: ScriptedAnthropicSource(results: [.success(anthropicSnapshot), .failure(AnthropicSourceFailure(.anthropicTimeout))], gate: anthropicGate),
             mode: .live,
             now: { Date(timeIntervalSince1970: 1_900_000_000) },
             activationDebounceNanoseconds: 0
@@ -214,11 +218,16 @@ final class UsageStoreTests: XCTestCase {
         let codexPrior = store.session.observation
         let anthropicPrior = store.anthropicReadings.map { $0.state.observation }
 
+        await codexGate.close()
+        await anthropicGate.close()
         store.refreshAfterWidgetOpen()
-        while store.isRefreshing == false { await Task.yield() }
+        await codexGate.waitForEntries(2)
+        await anthropicGate.waitForEntries(2)
         XCTAssertEqual(store.session.observation, codexPrior)
         XCTAssertTrue(store.anthropicReadings.allSatisfy { $0.state.statusName == "stale" })
-        while store.isRefreshing { await Task.yield() }
+        await codexGate.open()
+        await anthropicGate.open()
+        await store.waitUntilIdle()
 
         guard case .stale(let observation, .processExited) = store.session else {
             return XCTFail("Codex activation failure must retain its exact prior reading as stale")
@@ -231,8 +240,10 @@ final class UsageStoreTests: XCTestCase {
     func testWidgetReopenAndManualRefreshEachReachSharedSingleFlight() async throws {
         let snapshot = await fixtureCodexSnapshot()
         let anthropicSnapshot = try await FixtureAnthropicSource().fetch()
-        let codex = ScriptedCodexSource(results: [.success(snapshot), .success(snapshot), .success(snapshot), .success(snapshot)])
-        let anthropic = ScriptedAnthropicSource(results: [.success(anthropicSnapshot), .success(anthropicSnapshot), .success(anthropicSnapshot), .success(anthropicSnapshot)])
+        let codexGate = FetchGate()
+        let anthropicGate = FetchGate()
+        let codex = ScriptedCodexSource(results: Array(repeating: .success(snapshot), count: 4), gate: codexGate)
+        let anthropic = ScriptedAnthropicSource(results: Array(repeating: .success(anthropicSnapshot), count: 4), gate: anthropicGate)
         var events: [AutomaticRefreshEvent] = []
         let store = UsageStore(
             codexSource: codex,
@@ -243,20 +254,30 @@ final class UsageStoreTests: XCTestCase {
         )
 
         await store.refresh() // Manual refresh remains direct.
+        await codexGate.close()
+        await anthropicGate.close()
         store.refreshAfterWidgetOpen() // One genuine open plus recomposition appearances.
         store.refreshAfterActivation() // Dashboard activation shares the same pending request.
         store.refreshAfterWidgetOpen()
         store.refreshAfterWidgetOpen()
-        for _ in 0..<50 where codex.callCount < 2 || anthropic.callCount < 2 { await Task.yield() }
+        await codexGate.waitForEntries(2)
+        await anthropicGate.waitForEntries(2)
         XCTAssertEqual(codex.callCount, 2)
         XCTAssertEqual(anthropic.callCount, 2)
-        while store.isRefreshing { await Task.yield() }
+        await codexGate.open()
+        await anthropicGate.open()
+        await store.waitUntilIdle()
 
+        await codexGate.close()
+        await anthropicGate.close()
         store.refreshAfterWidgetOpen() // Close/reopen after the completed debounce.
-        for _ in 0..<50 where codex.callCount < 3 || anthropic.callCount < 3 { await Task.yield() }
+        await codexGate.waitForEntries(3)
+        await anthropicGate.waitForEntries(3)
         XCTAssertEqual(codex.callCount, 3)
         XCTAssertEqual(anthropic.callCount, 3)
-        while store.isRefreshing { await Task.yield() }
+        await codexGate.open()
+        await anthropicGate.open()
+        await store.waitUntilIdle()
 
         await store.refresh()
         XCTAssertEqual(codex.callCount, 4)
@@ -369,14 +390,16 @@ private final class ScriptedCodexSource: CodexUsageSource {
     private let lock = NSLock()
     private var results: [Result<CodexSnapshot, Error>]
     private let delayNanoseconds: UInt64
+    private let gate: FetchGate?
     private(set) var callCount = 0
     private(set) var maximumConcurrentCalls = 0
     private(set) var cancelCallCount = 0
     private var concurrentCalls = 0
 
-    init(results: [Result<CodexSnapshot, Error>], delayNanoseconds: UInt64 = 0) {
+    init(results: [Result<CodexSnapshot, Error>], delayNanoseconds: UInt64 = 0, gate: FetchGate? = nil) {
         self.results = results
         self.delayNanoseconds = delayNanoseconds
+        self.gate = gate
     }
 
     func fetch() async throws -> CodexSnapshot {
@@ -387,6 +410,7 @@ private final class ScriptedCodexSource: CodexUsageSource {
             return results.isEmpty ? .failure(RedactedIssue.protocolEOF) : results.removeFirst()
         }
         defer { lock.withLock { concurrentCalls -= 1 } }
+        await gate?.enter()
         if delayNanoseconds > 0 { try await Task.sleep(nanoseconds: delayNanoseconds) }
         return try result.get()
     }
@@ -400,14 +424,16 @@ private final class ScriptedAnthropicSource: AnthropicUsageSource {
     private let lock = NSLock()
     private var results: [Result<AnthropicSnapshot, Error>]
     private let delayNanoseconds: UInt64
+    private let gate: FetchGate?
     private(set) var cancelCallCount = 0
     private(set) var callCount = 0
     private(set) var maximumConcurrentCalls = 0
     private var concurrentCalls = 0
 
-    init(results: [Result<AnthropicSnapshot, Error>], delayNanoseconds: UInt64 = 0) {
+    init(results: [Result<AnthropicSnapshot, Error>], delayNanoseconds: UInt64 = 0, gate: FetchGate? = nil) {
         self.results = results
         self.delayNanoseconds = delayNanoseconds
+        self.gate = gate
     }
 
     func fetch() async throws -> AnthropicSnapshot {
@@ -418,6 +444,7 @@ private final class ScriptedAnthropicSource: AnthropicUsageSource {
             return results.isEmpty ? .failure(AnthropicSourceFailure(.anthropicNetworkUnavailable)) : results.removeFirst()
         }
         defer { lock.withLock { concurrentCalls -= 1 } }
+        await gate?.enter()
         if delayNanoseconds > 0 { try await Task.sleep(nanoseconds: delayNanoseconds) }
         return try result.get()
     }
@@ -432,5 +459,43 @@ private extension NSLock {
         lock()
         defer { unlock() }
         return try body()
+    }
+}
+
+/// Holds scripted fetches in flight until the test opens it, so in-flight state is observed
+/// rather than raced.
+private actor FetchGate {
+    private var isOpen = true
+    private var entries = 0
+    private var held: [CheckedContinuation<Void, Never>] = []
+    private var entryWaiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
+
+    func enter() async {
+        entries += 1
+        let ready = entryWaiters.filter { $0.count <= entries }
+        entryWaiters.removeAll { $0.count <= entries }
+        ready.forEach { $0.continuation.resume() }
+        guard !isOpen else { return }
+        await withCheckedContinuation { held.append($0) }
+    }
+
+    func waitForEntries(_ count: Int) async {
+        guard entries < count else { return }
+        await withCheckedContinuation { entryWaiters.append((count, $0)) }
+    }
+
+    func close() { isOpen = false }
+
+    func open() {
+        isOpen = true
+        let released = held
+        held = []
+        released.forEach { $0.resume() }
+    }
+}
+
+private extension UsageStore {
+    func waitUntilIdle() async {
+        for await refreshing in $isRefreshing.values where !refreshing { return }
     }
 }
