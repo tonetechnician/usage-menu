@@ -60,8 +60,10 @@ abort "REFUSING: publication could use main packaging output" if publish.match?(
 gh_steps = steps.select { |step| step["run"]&.match?(/(?:^|[\s;&|!(])gh\s/) }
 gh_steps.each do |step|
   abort "REFUSING: gh step #{step["name"]} lacks GH_TOKEN from github.token" unless step.dig("env", "GH_TOKEN") == "${{ github.token }}"
+  abort "REFUSING: gh step #{step["name"]} lacks GH_REPO from github.repository" unless step.dig("env", "GH_REPO") == "${{ github.repository }}"
 end
 abort "REFUSING: GH_TOKEN reaches a step that does not run gh" unless (steps - gh_steps).none? { |step| step.dig("env", "GH_TOKEN") }
+abort "REFUSING: GH_REPO reaches a step that does not run gh" unless (steps - gh_steps).none? { |step| step.dig("env", "GH_REPO") }
 
 guard = steps.find { |step| step["name"] == "Refuse an existing release" }&.fetch("run") or abort "REFUSING: missing existing-release guard"
 abort "REFUSING: existing-release guard does not run before publication" unless steps.index { |step| step["name"] == "Refuse an existing release" } < steps.index(publish_steps.first)
