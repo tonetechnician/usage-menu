@@ -6,8 +6,8 @@ bin/release-validate
 version=$(tr -d '\r\n' < VERSION)
 zip="UsageMenu-$version-universal-adhoc.zip"
 pkg="UsageMenu-$version-universal-unsigned.pkg"
-test "$zip" = UsageMenu-0.1.0-universal-adhoc.zip
-test "$pkg" = UsageMenu-0.1.0-universal-unsigned.pkg
+test "$zip" = UsageMenu-0.1.1-universal-adhoc.zip
+test "$pkg" = UsageMenu-0.1.1-universal-unsigned.pkg
 
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/usage-menu-release-test.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
@@ -38,8 +38,8 @@ fi
 
 notes="$tmp/RELEASE_NOTES.md"
 bin/release-notes "$version" CHANGELOG.md > "$notes"
-grep -Fqx '### Added' "$notes"
-grep -Fqx -- '- A macOS menu-bar view and dashboard for independently reported Codex and Claude Code quota windows.' "$notes"
+grep -Fqx '### Fixed' "$notes"
+grep -Fq -- '- Usage Menu no longer refreshes the Claude Code sign-in' "$notes"
 ! grep -Fq '## [Unreleased]' "$notes"
 
 printf '%s\n' '# Changelog' '' '## [9.9.9] - 2026-08-15' '' 'body' > "$tmp/missing.md"

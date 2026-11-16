@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-16
+
 ### Fixed
 
 - Usage Menu no longer refreshes the Claude Code sign-in, which could leave Claude Code asking for `/login` again and again. It now reads the Claude Code Keychain item first and the `.credentials.json` file only when the Keychain has no item, and shows sign-in required when the sign-in has expired. If `~/.claude/.oauth_refresh.lock` is a regular file (`ls -ld` shows `-rw…`, not `d…`), an earlier build left it behind: quit Usage Menu and delete that file so Claude Code can renew its sign-in again.
